@@ -30,6 +30,23 @@
 
 这个项目适合希望在本地管理 AI 智能体工作流的用户与开发者：普通用户可以通过图形界面快速开始，开发者也可以直接阅读源码、调整运行时集成方式，并基于现有架构继续扩展。
 
+ OpenClaw 调用 Hermes 子进程的数据流示意：
+
+```mermaid
+graph LR
+  A[用户消息] --> OC(OpenClaw 主进程)
+  OC -->|解析消息| B{是否需要 Hermes}
+  B -- 是 --> CallHermes[调用 Hermes 子进程]
+  CallHermes -->|STDIN/HTTP| HermesCore[Hermes Core]
+  HermesCore -->|结果| CallHermes
+  CallHermes -->|返回| OC
+  B -- 否 --> OCAgent[OC Agent]
+  OCAgent -->|生成回复| OC
+  OC -->|发送| C[用户]
+```
+
+
+
 ## 主要能力
 
 - **图形化初始化**：通过首次启动向导配置语言、模型供应商、运行模式和内置技能。
