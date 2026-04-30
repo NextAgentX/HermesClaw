@@ -22,10 +22,10 @@ const { gatewayState, settingsState, tMock } = vi.hoisted(() => ({
     language: 'en',
     setLanguage: vi.fn(),
     runtime: {
-      installChoice: 'openclaw' as const,
-      mode: 'openclaw' as const,
-      installedKinds: ['openclaw'] as const,
-      lastStandaloneRuntime: 'openclaw' as const,
+      installChoice: 'both' as const,
+      mode: 'hermesclaw-both' as const,
+      installedKinds: ['openclaw', 'hermes'] as const,
+      lastStandaloneRuntime: 'hermes' as const,
       windowsHermesPreferredMode: 'wsl2' as const,
       windowsHermesNativePath: undefined as string | undefined,
       windowsHermesWslDistro: undefined as string | undefined,
@@ -118,16 +118,16 @@ describe('Setup runtime selection', () => {
     settingsState.language = 'en';
     settingsState.setLanguage = vi.fn();
     settingsState.runtime = {
-      installChoice: 'openclaw',
-      mode: 'openclaw',
-      installedKinds: ['openclaw'],
-      lastStandaloneRuntime: 'openclaw',
+      installChoice: 'both',
+      mode: 'hermesclaw-both',
+      installedKinds: ['openclaw', 'hermes'],
+      lastStandaloneRuntime: 'hermes',
       windowsHermesPreferredMode: 'wsl2',
       windowsHermesNativePath: undefined,
       windowsHermesWslDistro: undefined,
     };
     tMock.mockImplementation((key: string) => key);
-    setRuntimeInstallChoiceMock.mockResolvedValue({ success: true, installChoice: 'openclaw' });
+    setRuntimeInstallChoiceMock.mockResolvedValue({ success: true, installChoice: 'both' });
     invokeIpcMock.mockImplementation((channel: string, _payload?: unknown) => {
       if (channel === 'openclaw:status') {
         return Promise.resolve({
@@ -181,7 +181,7 @@ describe('Setup runtime selection', () => {
     }));
   });
 
-  it('passes the selected both choice into runtime install orchestration', async () => {
+  it('only exposes the combined choice and passes it into runtime install orchestration', async () => {
     render(<Setup />);
 
     fireEvent.click(screen.getByTestId('setup-next-button'));
@@ -190,6 +190,8 @@ describe('Setup runtime selection', () => {
       expect(invokeIpcMock).toHaveBeenCalledWith('openclaw:status');
       expect(screen.getByTestId('setup-install-choice-both')).toBeInTheDocument();
     });
+    expect(screen.queryByTestId('setup-install-choice-openclaw')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('setup-install-choice-hermes')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('setup-install-choice-both'));
     expect(screen.getByTestId('setup-install-choice-both')).toHaveAttribute('aria-pressed', 'true');
@@ -207,14 +209,15 @@ describe('Setup runtime selection', () => {
     });
   });
 
-  it('allows hermes-only selection to proceed without openclaw readiness', async () => {
+  it('requires OpenClaw readiness because setup only installs the combined runtime', async () => {
     gatewayState.status = { state: 'stopped', port: 18789 };
     invokeIpcMock.mockImplementation((channel: string, _payload?: unknown) => {
       if (channel === 'openclaw:status') {
         return Promise.resolve({
-          packageExists: false,
-          isBuilt: false,
+          packageExists: true,
+          isBuilt: true,
           dir: '/tmp/openclaw',
+          version: '2026.4.15',
         });
       }
 
@@ -228,24 +231,13 @@ describe('Setup runtime selection', () => {
     await waitFor(() => {
       expect(nextButton).toBeDisabled();
     });
-
-    fireEvent.click(screen.getByTestId('setup-install-choice-hermes'));
-    await waitFor(() => {
-      expect(setRuntimeInstallChoiceMock).toHaveBeenCalledWith('hermes');
-    });
-
-    await waitFor(() => {
-      expect(nextButton).not.toBeDisabled();
-    });
-
-    fireEvent.click(nextButton);
-
-    await waitFor(() => {
-      expect(installRuntimeMock).toHaveBeenCalledWith('hermes');
-    });
+    expect(screen.getByTestId('setup-install-choice-both')).toBeInTheDocument();
+    expect(screen.queryByTestId('setup-install-choice-hermes')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('setup-install-choice-openclaw')).not.toBeInTheDocument();
+    expect(installRuntimeMock).not.toHaveBeenCalled();
   });
 
-  it('blocks hermes and both on Windows when neither native Hermes nor WSL is configured', async () => {
+  it('blocks the combined runtime on Windows when neither native Hermes nor WSL is configured', async () => {
     invokeIpcMock.mockImplementation((channel: string) => {
       if (channel === 'openclaw:status') {
         return Promise.resolve({
@@ -270,28 +262,27 @@ describe('Setup runtime selection', () => {
     render(<Setup />);
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
-    const hermesButton = await screen.findByTestId('setup-install-choice-hermes');
-    const bothButton = screen.getByTestId('setup-install-choice-both');
-    const openclawButton = screen.getByTestId('setup-install-choice-openclaw');
+    const bothButton = await screen.findByTestId('setup-install-choice-both');
     const nextButton = screen.getByTestId('setup-next-button');
 
     await waitFor(() => {
       expect(screen.getByTestId('setup-runtime-wsl2-notice')).toBeInTheDocument();
-      expect(openclawButton).not.toBeDisabled();
-      expect(hermesButton).toBeDisabled();
       expect(bothButton).toBeDisabled();
-      expect(nextButton).toBeEnabled();
+      expect(nextButton).toBeDisabled();
     });
+    expect(screen.queryByTestId('setup-install-choice-openclaw')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('setup-install-choice-hermes')).not.toBeInTheDocument();
   });
 
-  it('allows hermes on Windows when a WSL distro is already configured', async () => {
+  it('allows the combined runtime on Windows when a WSL distro is already configured', async () => {
     settingsState.runtime.windowsHermesWslDistro = 'Ubuntu-24.04';
     invokeIpcMock.mockImplementation((channel: string) => {
       if (channel === 'openclaw:status') {
         return Promise.resolve({
-          packageExists: false,
-          isBuilt: false,
+          packageExists: true,
+          isBuilt: true,
           dir: '/tmp/openclaw',
+          version: '2026.4.15',
         });
       }
 
@@ -305,17 +296,17 @@ describe('Setup runtime selection', () => {
     render(<Setup />);
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
-    const hermesButton = await screen.findByTestId('setup-install-choice-hermes');
+    const bothButton = await screen.findByTestId('setup-install-choice-both');
     const nextButton = screen.getByTestId('setup-next-button');
 
     await waitFor(() => {
       expect(screen.getByTestId('setup-runtime-wsl2-notice')).toBeInTheDocument();
-      expect(hermesButton).not.toBeDisabled();
+      expect(bothButton).not.toBeDisabled();
     });
 
-    fireEvent.click(hermesButton);
+    fireEvent.click(bothButton);
     await waitFor(() => {
-      expect(setRuntimeInstallChoiceMock).toHaveBeenCalledWith('hermes');
+      expect(setRuntimeInstallChoiceMock).toHaveBeenCalledWith('both');
     });
 
     await waitFor(() => {
@@ -325,19 +316,20 @@ describe('Setup runtime selection', () => {
     fireEvent.click(nextButton);
 
     await waitFor(() => {
-      expect(installRuntimeMock).toHaveBeenCalledWith('hermes');
+      expect(installRuntimeMock).toHaveBeenCalledWith('both');
     });
   });
 
-  it('allows hermes on Windows when a native Hermes path is configured without WSL', async () => {
+  it('allows the combined runtime on Windows when a native Hermes path is configured without WSL', async () => {
     settingsState.runtime.windowsHermesPreferredMode = 'native';
     settingsState.runtime.windowsHermesNativePath = 'C:\\Hermes\\.hermes';
     invokeIpcMock.mockImplementation((channel: string) => {
       if (channel === 'openclaw:status') {
         return Promise.resolve({
-          packageExists: false,
-          isBuilt: false,
+          packageExists: true,
+          isBuilt: true,
           dir: '/tmp/openclaw',
+          version: '2026.4.15',
         });
       }
 
@@ -355,19 +347,17 @@ describe('Setup runtime selection', () => {
     render(<Setup />);
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
-    const hermesButton = await screen.findByTestId('setup-install-choice-hermes');
-    const bothButton = screen.getByTestId('setup-install-choice-both');
+    const bothButton = await screen.findByTestId('setup-install-choice-both');
     const nextButton = screen.getByTestId('setup-next-button');
 
     await waitFor(() => {
       expect(screen.getByTestId('setup-runtime-wsl2-notice')).toBeInTheDocument();
-      expect(hermesButton).not.toBeDisabled();
       expect(bothButton).not.toBeDisabled();
     });
 
-    fireEvent.click(hermesButton);
+    fireEvent.click(bothButton);
     await waitFor(() => {
-      expect(setRuntimeInstallChoiceMock).toHaveBeenCalledWith('hermes');
+      expect(setRuntimeInstallChoiceMock).toHaveBeenCalledWith('both');
       expect(nextButton).not.toBeDisabled();
     });
   });
@@ -398,12 +388,10 @@ describe('Setup runtime selection', () => {
     render(<Setup />);
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
-    const hermesButton = await screen.findByTestId('setup-install-choice-hermes');
-    const bothButton = screen.getByTestId('setup-install-choice-both');
+    const bothButton = await screen.findByTestId('setup-install-choice-both');
 
     await waitFor(() => {
       expect(invokeIpcMock).toHaveBeenCalledWith('wsl:list');
-      expect(hermesButton).not.toBeDisabled();
       expect(bothButton).not.toBeDisabled();
     });
 
@@ -412,10 +400,10 @@ describe('Setup runtime selection', () => {
     expect(persistCall?.[1]).toMatchObject({ method: 'PUT' });
     expect(JSON.parse(String(persistCall?.[1]?.body))).toEqual({
       value: expect.objectContaining({
-        installChoice: 'openclaw',
-        mode: 'openclaw',
-        installedKinds: ['openclaw'],
-        lastStandaloneRuntime: 'openclaw',
+        installChoice: 'both',
+        mode: 'hermesclaw-both',
+        installedKinds: ['openclaw', 'hermes'],
+        lastStandaloneRuntime: 'hermes',
         windowsHermesPreferredMode: 'wsl2',
         windowsHermesWslDistro: 'Ubuntu-24.04',
       }),
@@ -452,6 +440,9 @@ describe('Setup runtime selection', () => {
     fireEvent.click(screen.getByTestId('setup-next-button'));
     await screen.findByTestId('setup-install-choice-both');
     fireEvent.click(screen.getByTestId('setup-install-choice-both'));
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-next-button')).not.toBeDisabled();
+    });
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
     await waitFor(() => {
@@ -506,6 +497,9 @@ describe('Setup runtime selection', () => {
     fireEvent.click(screen.getByTestId('setup-next-button'));
     await screen.findByTestId('setup-install-choice-both');
     fireEvent.click(screen.getByTestId('setup-install-choice-both'));
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-next-button')).not.toBeDisabled();
+    });
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
     await waitFor(() => {
@@ -535,13 +529,13 @@ describe('Setup runtime selection', () => {
     installRuntimeMock.mockRejectedValueOnce(new Error('Hermes WSL environment failed'));
     installRuntimeMock.mockResolvedValueOnce({
       success: true,
-      installChoice: 'hermes',
+      installChoice: 'both',
       steps: [{ id: 'hermes', kind: 'runtime', status: 'completed', label: 'Hermes runtime' }],
       snapshot: {
         runtime: {
-          installChoice: 'hermes',
-          mode: 'hermes',
-          installedKinds: ['hermes'],
+          installChoice: 'both',
+          mode: 'openclaw-with-hermes-agent',
+          installedKinds: ['openclaw', 'hermes'],
         },
         bridge: {
           enabled: false,
@@ -556,8 +550,11 @@ describe('Setup runtime selection', () => {
 
     render(<Setup />);
     fireEvent.click(screen.getByTestId('setup-next-button'));
-    await screen.findByTestId('setup-install-choice-hermes');
-    fireEvent.click(screen.getByTestId('setup-install-choice-hermes'));
+    await screen.findByTestId('setup-install-choice-both');
+    fireEvent.click(screen.getByTestId('setup-install-choice-both'));
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-next-button')).not.toBeDisabled();
+    });
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
     await waitFor(() => {
@@ -606,6 +603,9 @@ describe('Setup runtime selection', () => {
     fireEvent.click(screen.getByTestId('setup-next-button'));
     await screen.findByTestId('setup-install-choice-both');
     fireEvent.click(screen.getByTestId('setup-install-choice-both'));
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-next-button')).not.toBeDisabled();
+    });
     fireEvent.click(screen.getByTestId('setup-next-button'));
 
     await waitFor(() => {

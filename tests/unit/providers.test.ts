@@ -59,8 +59,59 @@ describe('provider metadata', () => {
 
   it('keeps builtin provider sources in sync', () => {
     expect(BUILTIN_PROVIDER_TYPES).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
+      expect.arrayContaining(['anthropic', 'openai', 'azure-openai', 'google', 'bedrock', 'openrouter', 'ark', 'moonshot', 'siliconflow', 'minimax-portal', 'minimax-portal-cn', 'modelstudio', 'ollama'])
     );
+  });
+
+  it('adds Azure OpenAI as an OpenClaw responses provider with explicit endpoint and deployment model', () => {
+    expect(PROVIDER_TYPES).toContain('azure-openai');
+    expect(BUILTIN_PROVIDER_TYPES).toContain('azure-openai');
+
+    expect(PROVIDER_TYPE_INFO).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'azure-openai',
+          name: 'Azure OpenAI',
+          requiresApiKey: true,
+          defaultBaseUrl: 'https://YOUR-RESOURCE.openai.azure.com/openai/v1',
+          showBaseUrl: true,
+          showModelId: true,
+          defaultModelId: 'gpt-4.1',
+        }),
+      ])
+    );
+    expect(getProviderEnvVar('azure-openai')).toBe('AZURE_OPENAI_API_KEY');
+    expect(getProviderConfig('azure-openai')).toEqual({
+      baseUrl: 'https://YOUR-RESOURCE.openai.azure.com/openai/v1',
+      api: 'azure-openai-responses',
+      apiKeyEnv: 'AZURE_OPENAI_API_KEY',
+    });
+  });
+
+  it('adds AWS Bedrock as a credential-chain provider backed by OpenClaw runtime config', () => {
+    expect(PROVIDER_TYPES).toContain('bedrock');
+    expect(BUILTIN_PROVIDER_TYPES).toContain('bedrock');
+
+    expect(PROVIDER_TYPE_INFO).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'bedrock',
+          name: 'AWS Bedrock',
+          requiresApiKey: false,
+          supportsApiKey: false,
+          showBaseUrl: true,
+          showModelId: true,
+          defaultBaseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+          defaultModelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+        }),
+      ])
+    );
+    expect(getProviderConfig('bedrock')).toEqual({
+      baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+      api: 'bedrock-converse-stream',
+    });
+    expect(getProviderEnvVar('bedrock')).toBeUndefined();
+    expect(resolveProviderApiKeyForSave('bedrock', 'AWS_SECRET_ACCESS_KEY')).toBeUndefined();
   });
 
   it('uses OpenAI-compatible Ollama default base URL', () => {
@@ -107,7 +158,7 @@ describe('provider metadata', () => {
 
     expect(openrouter).toMatchObject({
       showModelId: true,
-      defaultModelId: 'openai/gpt-5.4',
+      defaultModelId: 'anthropic/claude-opus-4.6',
     });
     expect(siliconflow).toMatchObject({
       showModelId: true,
@@ -164,8 +215,8 @@ describe('provider metadata', () => {
     expect(resolveProviderModelForSave(openrouter, 'openai/gpt-5', true)).toBe('openai/gpt-5');
     expect(resolveProviderModelForSave(siliconflow, 'Qwen/Qwen3-Coder-480B-A35B-Instruct', true)).toBe('Qwen/Qwen3-Coder-480B-A35B-Instruct');
 
-    expect(resolveProviderModelForSave(openrouter, '   ', false)).toBe('openai/gpt-5.4');
-    expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('openai/gpt-5.4');
+    expect(resolveProviderModelForSave(openrouter, '   ', false)).toBe('anthropic/claude-opus-4.6');
+    expect(resolveProviderModelForSave(openrouter, '   ', true)).toBe('anthropic/claude-opus-4.6');
     expect(resolveProviderModelForSave(siliconflow, '   ', false)).toBeUndefined();
     expect(resolveProviderModelForSave(siliconflow, '   ', true)).toBe('deepseek-ai/DeepSeek-V3');
     expect(resolveProviderModelForSave(ark, '  ep-custom-model  ', false)).toBe('ep-custom-model');
