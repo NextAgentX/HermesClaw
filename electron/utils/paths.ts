@@ -4,9 +4,9 @@
  */
 import { createRequire } from 'node:module';
 import { execFileSync } from 'child_process';
-import { join } from 'path';
+import { isAbsolute, join } from 'path';
 import { homedir } from 'os';
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import type { HermesWindowsPreferredMode, InstallStatus } from '../runtime/types';
 
 const require = createRequire(import.meta.url);
@@ -94,6 +94,51 @@ export interface HermesClawRuntimeLayout {
   cacheDir: string;
 }
 
+interface ActiveOpenClawRuntimeRecord {
+  runtimeDir?: string;
+  version?: string;
+}
+
+interface OpenClawRuntimeDescriptor {
+  schemaVersion?: number;
+  version?: string;
+  entry?: {
+    type?: string;
+    command?: string;
+    args?: string[];
+  };
+  health?: {
+    url?: string;
+  };
+}
+
+/**
+ * Current schema version for OpenClaw runtime.json descriptors.
+ *
+ * History:
+ *   v1 (legacy): entry.args could contain the obsolete `dist/gateway.js` entrypoint.
+ *   v2: entry.args MUST point at the current `dist/entry.js` entrypoint.
+ *
+ * On read, descriptors with schemaVersion < 2 are auto-migrated by overwriting
+ * with the current default so stale on-disk state self-heals.
+ */
+const OPENCLAW_DESCRIPTOR_SCHEMA_VERSION = 2;
+
+function buildDefaultOpenClawDescriptor(version: string | undefined): OpenClawRuntimeDescriptor {
+  return {
+    schemaVersion: OPENCLAW_DESCRIPTOR_SCHEMA_VERSION,
+    version: version ?? 'local',
+    entry: {
+      type: 'node',
+      command: 'node',
+      args: ['dist/entry.js'],
+    },
+    health: {
+      url: 'http://127.0.0.1:18789/health',
+    },
+  };
+}
+
 export function getHermesClawRootDir(): string {
   return join(getElectronApp().getPath('userData'), 'HermesClaw');
 }
@@ -135,12 +180,61 @@ export function ensureHermesClawRuntimeLayout(): HermesClawRuntimeLayout {
   ensureDir(layout.backupsDir);
   ensureDir(layout.logsDir);
   ensureDir(layout.cacheDir);
+  // Best-effort, idempotent heal: legacy installs may have written
+  // hermes.runtimeDir pointing at the OpenClaw directory. Rewrite it now so
+  // every consumer of the layout sees consistent state.
+  healActiveHermesRuntimePathIfMisPointed();
   return layout;
 }
 
 function hasWslExecutable(): boolean {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
   return existsSync(join(systemRoot, 'System32', 'wsl.exe'));
+}
+
+function getBundledHermesAgentDir(): string {
+  if (getElectronApp().isPackaged) {
+    return join(process.resourcesPath, 'hermes-agent');
+  }
+  return join(getElectronApp().getAppPath(), 'build', 'hermes-agent');
+}
+
+function getBundledHermesAgentPythonPath(runtimeDir: string): string {
+  if (process.platform === 'win32') {
+    return join(runtimeDir, '.venv', 'Scripts', 'python.exe');
+  }
+  return join(runtimeDir, '.venv', 'bin', 'python');
+}
+
+function readBundledHermesAgentVersion(runtimeDir: string): string | undefined {
+  try {
+    const manifestPath = join(runtimeDir, 'manifest.json');
+    if (!existsSync(manifestPath)) {
+      return undefined;
+    }
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { version?: string };
+    return manifest.version;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildBundledHermesInstallStatus(): HermesInstallStatus | undefined {
+  const runtimeDir = getBundledHermesAgentDir();
+  const manifestPath = join(runtimeDir, 'manifest.json');
+  const pythonPath = getBundledHermesAgentPythonPath(runtimeDir);
+
+  if (!existsSync(runtimeDir) || !existsSync(manifestPath) || !existsSync(pythonPath)) {
+    return undefined;
+  }
+
+  return {
+    installed: true,
+    installMode: 'native',
+    installPath: runtimeDir,
+    endpoint: getHermesEndpoint(),
+    version: readBundledHermesAgentVersion(runtimeDir),
+  };
 }
 
 function getHermesWslHomeLabel(distro: string): string {
@@ -193,13 +287,10 @@ export function listWslDistros(): string[] {
   }
 }
 
-function buildNativeHermesInstallStatus(
-  persistedInstalled: boolean,
-  configuredPath?: string,
-): HermesInstallStatus {
+function buildNativeHermesInstallStatus(configuredPath?: string): HermesInstallStatus {
   const installPath = getHermesNativeHomeLabel(configuredPath);
   const reachable = existsSync(installPath);
-  const installed = persistedInstalled || reachable;
+  const installed = reachable;
 
   return {
     installed,
@@ -210,10 +301,7 @@ function buildNativeHermesInstallStatus(
   };
 }
 
-function buildWslHermesInstallStatus(
-  persistedInstalled: boolean,
-  distro?: string,
-): HermesInstallStatus {
+function buildWslHermesInstallStatus(distro?: string): HermesInstallStatus {
   if (!distro) {
     return {
       installed: false,
@@ -236,7 +324,7 @@ function buildWslHermesInstallStatus(
   }
 
   const reachable = probeHermesHomeInWsl(distro);
-  const installed = persistedInstalled || reachable;
+  const installed = reachable;
 
   return {
     installed,
@@ -256,12 +344,12 @@ function mergeHermesProbeErrors(statuses: HermesInstallStatus[]): string | undef
 }
 
 export function getHermesInstallStatus(options: HermesInstallStatusOptions = {}): HermesInstallStatus {
-  const persistedInstalled = options.installedKinds?.includes('hermes') ?? false;
+  const bundledStatus = buildBundledHermesInstallStatus();
 
   if (process.platform === 'win32') {
     const preferredMode = options.windowsHermesPreferredMode ?? 'wsl2';
-    const nativeStatus = buildNativeHermesInstallStatus(persistedInstalled, options.windowsHermesNativePath);
-    const wslStatus = buildWslHermesInstallStatus(persistedInstalled, options.windowsHermesWslDistro);
+    const nativeStatus = buildNativeHermesInstallStatus(options.windowsHermesNativePath);
+    const wslStatus = buildWslHermesInstallStatus(options.windowsHermesWslDistro);
     const orderedStatuses = preferredMode === 'native'
       ? [nativeStatus, wslStatus]
       : [wslStatus, nativeStatus];
@@ -271,6 +359,10 @@ export function getHermesInstallStatus(options: HermesInstallStatusOptions = {})
       return installedStatus;
     }
 
+    if (bundledStatus) {
+      return bundledStatus;
+    }
+
     const primaryStatus = orderedStatuses[0];
     return {
       ...primaryStatus,
@@ -278,7 +370,11 @@ export function getHermesInstallStatus(options: HermesInstallStatusOptions = {})
     };
   }
 
-  return buildNativeHermesInstallStatus(persistedInstalled, options.windowsHermesNativePath);
+  const nativeStatus = buildNativeHermesInstallStatus(options.windowsHermesNativePath);
+  if (nativeStatus.installed) {
+    return nativeStatus;
+  }
+  return bundledStatus ?? nativeStatus;
 }
 
 /**
@@ -328,6 +424,133 @@ export function getResourcesDir(): string {
   return join(__dirname, '../../resources');
 }
 
+function getBundledOpenClawDir(): string {
+  if (getElectronApp().isPackaged) {
+    return join(process.resourcesPath, 'openclaw');
+  }
+  return join(__dirname, '../../node_modules/openclaw');
+}
+
+function readActiveOpenClawRuntimeRecord(): ActiveOpenClawRuntimeRecord | undefined {
+  try {
+    const layout = getHermesClawRuntimeLayout();
+    if (!existsSync(layout.activeRuntimesPath)) {
+      return undefined;
+    }
+
+    const parsed = JSON.parse(readFileSync(layout.activeRuntimesPath, 'utf-8')) as {
+      runtimes?: {
+        openclaw?: ActiveOpenClawRuntimeRecord;
+      };
+    };
+    const activeRuntime = parsed.runtimes?.openclaw;
+    if (!activeRuntime?.runtimeDir || !existsSync(activeRuntime.runtimeDir)) {
+      return undefined;
+    }
+    return activeRuntime;
+  } catch {
+    return undefined;
+  }
+}
+
+function readOpenClawRuntimeDescriptor(runtimeDir: string): OpenClawRuntimeDescriptor | undefined {
+  try {
+    const descriptorPath = join(runtimeDir, 'runtime.json');
+    if (!existsSync(descriptorPath)) {
+      return undefined;
+    }
+    const parsed = JSON.parse(readFileSync(descriptorPath, 'utf-8')) as OpenClawRuntimeDescriptor;
+
+    // Migrate legacy v1 descriptors (which may point at the obsolete
+    // `dist/gateway.js` entrypoint) by rewriting with current defaults.
+    // Preserves the recorded version so callers downstream still see it.
+    const currentSchemaVersion = parsed.schemaVersion ?? 1;
+    if (currentSchemaVersion < OPENCLAW_DESCRIPTOR_SCHEMA_VERSION) {
+      const migrated = buildDefaultOpenClawDescriptor(parsed.version);
+      try {
+        writeFileSync(descriptorPath, JSON.stringify(migrated, null, 2), 'utf-8');
+      } catch {
+        // If we cannot rewrite (e.g. read-only fs), still return the migrated
+        // shape in-memory so the launcher uses the correct entrypoint.
+      }
+      return migrated;
+    }
+
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+interface ActiveHermesRuntimeRecord {
+  runtimeDir?: string;
+  version?: string;
+  status?: string;
+}
+
+interface ActiveRuntimesFile {
+  schemaVersion?: number;
+  runtimes?: {
+    openclaw?: ActiveOpenClawRuntimeRecord;
+    hermes?: ActiveHermesRuntimeRecord & Record<string, unknown>;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Heal active-runtimes.json when an old code path mis-pointed the Hermes
+ * runtime record at the OpenClaw runtime directory. The signature is the
+ * literal `\openclaw\` (or `/openclaw/`) path segment in the recorded
+ * `hermes.runtimeDir`. We rewrite it to the symmetric `\hermes\` path under
+ * `userRuntimesDir` and clear `status: 'rollback-required'` so the gateway
+ * can be restarted without manual intervention.
+ *
+ * Idempotent: returns immediately if no mis-pointed record is found.
+ */
+export function healActiveHermesRuntimePathIfMisPointed(): void {
+  try {
+    const layout = getHermesClawRuntimeLayout();
+    if (!existsSync(layout.activeRuntimesPath)) {
+      return;
+    }
+
+    const raw = readFileSync(layout.activeRuntimesPath, 'utf-8');
+    const parsed = JSON.parse(raw) as ActiveRuntimesFile;
+    const hermesRecord = parsed.runtimes?.hermes;
+    const hermesDir = hermesRecord?.runtimeDir;
+    if (!hermesRecord || typeof hermesDir !== 'string' || hermesDir.length === 0) {
+      return;
+    }
+
+    const containsOpenClawSegment = /[\\/]openclaw[\\/]/i.test(hermesDir);
+    if (!containsOpenClawSegment) {
+      return;
+    }
+
+    // Rewrite by swapping the first `\openclaw\` segment for `\hermes\`.
+    const healedDir = hermesDir.replace(/([\\/])openclaw([\\/])/i, '$1hermes$2');
+    hermesRecord.runtimeDir = healedDir;
+
+    if (hermesRecord.status === 'rollback-required') {
+      hermesRecord.status = 'ready';
+      delete (hermesRecord as Record<string, unknown>).lastError;
+    }
+
+    writeFileSync(layout.activeRuntimesPath, JSON.stringify(parsed, null, 2), 'utf-8');
+  } catch {
+    // Healing is best-effort; never block startup on a heal failure.
+  }
+}
+
+function resolveOpenClawRuntimeEntryFromDescriptor(runtimeDir: string): string | undefined {
+  const descriptor = readOpenClawRuntimeDescriptor(runtimeDir);
+  const entryArg = descriptor?.entry?.args?.[0];
+  if (!entryArg || descriptor?.entry?.type !== 'node') {
+    return undefined;
+  }
+  return isAbsolute(entryArg) ? entryArg : join(runtimeDir, entryArg);
+}
+
 /**
  * Get preload script path
  */
@@ -341,11 +564,7 @@ export function getPreloadPath(): string {
  * - Development: from node_modules/openclaw
  */
 export function getOpenClawDir(): string {
-  if (getElectronApp().isPackaged) {
-    return join(process.resourcesPath, 'openclaw');
-  }
-  // Development: use node_modules/openclaw
-  return join(__dirname, '../../node_modules/openclaw');
+  return getBundledOpenClawDir();
 }
 
 /**
@@ -365,10 +584,42 @@ export function getOpenClawResolvedDir(): string {
 }
 
 /**
+ * Get the active OpenClaw runtime directory when HermesClaw runtime state has
+ * switched to a downloaded runtime; otherwise fall back to the bundled package.
+ */
+export function getOpenClawRuntimeDir(): string {
+  return readActiveOpenClawRuntimeRecord()?.runtimeDir ?? getBundledOpenClawDir();
+}
+
+/**
+ * Get the active OpenClaw runtime directory resolved to a real path.
+ */
+export function getOpenClawRuntimeResolvedDir(): string {
+  const dir = getOpenClawRuntimeDir();
+  if (!existsSync(dir)) {
+    return dir;
+  }
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+/**
  * Get OpenClaw entry script path (openclaw.mjs)
  */
 export function getOpenClawEntryPath(): string {
   return join(getOpenClawDir(), 'openclaw.mjs');
+}
+
+/**
+ * Get the entry script for the active OpenClaw runtime. Downloaded runtimes may
+ * provide a runtime.json descriptor instead of the packaged openclaw.mjs entry.
+ */
+export function getOpenClawRuntimeEntryPath(): string {
+  const runtimeDir = getOpenClawRuntimeDir();
+  return resolveOpenClawRuntimeEntryFromDescriptor(runtimeDir) ?? join(runtimeDir, 'openclaw.mjs');
 }
 
 /**
@@ -393,6 +644,14 @@ export function isOpenClawPresent(): boolean {
   const dir = getOpenClawDir();
   const pkgJsonPath = join(dir, 'package.json');
   return existsSync(dir) && existsSync(pkgJsonPath);
+}
+
+export function isOpenClawRuntimePresent(): boolean {
+  const dir = getOpenClawRuntimeDir();
+  const runtimeEntryPath = getOpenClawRuntimeEntryPath();
+  const pkgJsonPath = join(dir, 'package.json');
+  const descriptorPath = join(dir, 'runtime.json');
+  return existsSync(dir) && (existsSync(runtimeEntryPath) || existsSync(pkgJsonPath) || existsSync(descriptorPath));
 }
 
 /**
@@ -447,4 +706,32 @@ export function getOpenClawStatus(): OpenClawStatus {
     // Ignore logger bootstrap issues in non-Electron contexts such as unit tests.
   }
   return status;
+}
+
+export function getOpenClawRuntimeStatus(): OpenClawStatus {
+  const dir = getOpenClawRuntimeDir();
+  const entryPath = getOpenClawRuntimeEntryPath();
+  const activeRuntime = readActiveOpenClawRuntimeRecord();
+  const descriptor = readOpenClawRuntimeDescriptor(dir);
+  let version = activeRuntime?.version ?? descriptor?.version;
+
+  if (!version) {
+    try {
+      const pkgPath = join(dir, 'package.json');
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
+        version = pkg.version;
+      }
+    } catch {
+      // Ignore version read errors.
+    }
+  }
+
+  return {
+    packageExists: isOpenClawRuntimePresent(),
+    isBuilt: existsSync(entryPath) || existsSync(join(dir, 'dist')),
+    entryPath,
+    dir,
+    version,
+  };
 }

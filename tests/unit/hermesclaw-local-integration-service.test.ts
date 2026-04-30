@@ -347,8 +347,13 @@ describe('hermesclaw local integration runtime state', () => {
     const { applyOpenClawRuntimeUpdate, rollbackOpenClawRuntime } = await import('@electron/runtime/services/hermesclaw-local-integration-service');
     const applyResult = await applyOpenClawRuntimeUpdate({ channel: 'stable', version: '1.3.0' });
     const rollbackResult = await rollbackOpenClawRuntime();
+    const runtimeDir = `${layout.userRuntimesDir}\\openclaw\\1.3.0`;
 
     expect(applyResult).toMatchObject({ success: true, version: '1.3.0' });
+    expect(readWritten(`${runtimeDir}\\runtime.json`)).toMatchObject({
+      version: '1.3.0',
+      entry: { command: 'node', args: ['dist/entry.js'] },
+    });
     expect(rollbackResult).toMatchObject({ supported: true, success: true, runtime: 'openclaw', action: 'rollback', restoredVersion: '1.2.0' });
     expect(readWritten(layout.activeRuntimesPath)).toMatchObject({
       runtimes: {

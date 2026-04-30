@@ -286,7 +286,7 @@ describe('Settings runtime panel', () => {
       channel: 'stable',
       version: '1.3.0',
       backupId: 'openclaw-stable-1',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       gatewayHealth: { ok: true, uptime: 1 },
       snapshot: runningOpenClawSnapshot,
@@ -298,7 +298,7 @@ describe('Settings runtime panel', () => {
       action: 'rollback',
       restoredVersion: '1.2.3',
       backupId: 'openclaw-stable-1',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       gatewayHealth: { ok: true, uptime: 1 },
       snapshot: runningOpenClawSnapshot,
@@ -1012,7 +1012,7 @@ describe('Settings runtime panel', () => {
       expect(applyOpenClawUpdateMock).toHaveBeenCalledTimes(1);
     });
     expect(screen.getByTestId('settings-runtime-openclaw-update-result')).toHaveTextContent(
-      'Applied OpenClaw 1.3.0 · backup openclaw-stable-1 · Gateway reload ready',
+      'Applied OpenClaw 1.3.0 · backup openclaw-stable-1 · Gateway restart ready',
     );
 
     fireEvent.click(screen.getByTestId('settings-runtime-openclaw-rollback-button'));
@@ -1020,7 +1020,7 @@ describe('Settings runtime panel', () => {
       expect(rollbackOpenClawRuntimeMock).toHaveBeenCalledTimes(1);
     });
     expect(screen.getByTestId('settings-runtime-openclaw-update-result')).toHaveTextContent(
-      'Rolled back OpenClaw to 1.2.3 · backup openclaw-stable-1 · Gateway reload ready',
+      'Rolled back OpenClaw to 1.2.3 · backup openclaw-stable-1 · Gateway restart ready',
     );
   });
 
@@ -1037,7 +1037,7 @@ describe('Settings runtime panel', () => {
       restoredVersion: '1.2.3',
       rollbackBackupId: 'openclaw-stable-1',
       error: 'Gateway readiness failed after update; automatically rolled back OpenClaw to 1.2.3',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       snapshot: {
         runtime: {

@@ -98,7 +98,7 @@ export class HermesStandaloneAdapter {
     options: BuildRuntimeStatusOptions = {},
   ): RuntimeStatus {
     const installStatus = this.getInstallStatus(runtime);
-    const installed = installStatus.installed || runtime.installedKinds.includes('hermes');
+    const installed = installStatus.installed;
     const standaloneMode = runtime.mode === 'hermes';
 
     if (standaloneMode) {

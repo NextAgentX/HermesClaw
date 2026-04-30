@@ -2033,11 +2033,9 @@ export function Settings() {
               </div>
               <div className="p-5 space-y-5">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
-                  <div>
+                  <div className="space-y-1">
                     <Label className="text-[15px] font-medium text-foreground/90">OpenClaw Runtime</Label>
-                    <p className="text-[12px] text-muted-foreground mt-1">
-                      {openClawRuntime?.version ?? 'local'} · {openClawRuntime?.installed ? 'Installed' : 'Not installed'}
-                    </p>
+                    <p className="text-[12px] text-muted-foreground">Version {openClawRuntime?.version ?? 'local'} · {openClawRuntime?.installed ? 'Installed' : 'Not installed'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -2088,11 +2086,9 @@ export function Settings() {
                 )}
 
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
-                  <div>
+                  <div className="space-y-1">
                     <Label className="text-[15px] font-medium text-foreground/90">HermesAgent Runtime</Label>
-                    <p className="text-[12px] text-muted-foreground mt-1">
-                      Version {hermesAgentVersion} · {hermesAgentStatusLabel}
-                    </p>
+                    <p className="text-[12px] text-muted-foreground">Version {hermesAgentVersion} · {hermesAgentStatusLabel}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-check-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawCheckUpdate()} className="rounded-full h-8 px-4">

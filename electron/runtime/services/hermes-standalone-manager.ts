@@ -27,6 +27,7 @@ interface HermesRuntimeDescriptor {
   entry?: HermesRuntimeEntry;
   command?: string;
   args?: string[];
+  packageName?: string;
 }
 
 interface HermesClawManifestFile {
@@ -161,6 +162,34 @@ class InstallStatusBackedHermesStandaloneManager implements HermesStandaloneMana
     return undefined;
   }
 
+  private bundledHermesAgentPythonPath(runtimeDir: string): string {
+    if (process.platform === 'win32') {
+      return join(runtimeDir, '.venv', 'Scripts', 'python.exe');
+    }
+    return join(runtimeDir, '.venv', 'bin', 'python');
+  }
+
+  private resolveBundledHermesAgentEntry(
+    runtimeDir: string,
+    descriptor: HermesRuntimeDescriptor | undefined,
+  ): HermesRuntimeEntry | undefined {
+    if (descriptor?.packageName !== 'hermes-agent') {
+      return undefined;
+    }
+
+    const pythonPath = this.bundledHermesAgentPythonPath(runtimeDir);
+    if (!existsSync(pythonPath)) {
+      return undefined;
+    }
+
+    return {
+      type: 'python',
+      command: pythonPath,
+      args: ['-m', 'hermes.gateway.run', '--port', '{port}'],
+      cwd: runtimeDir,
+    };
+  }
+
   private async resolveLaunchPlan(endpoint: string): Promise<HermesLaunchPlan> {
     const installStatus = await this.getInstallStatus();
     if (!installStatus.installed) {
@@ -173,7 +202,9 @@ class InstallStatusBackedHermesStandaloneManager implements HermesStandaloneMana
     ].filter((value): value is string => Boolean(value));
 
     for (const runtimeDir of candidateDirs) {
-      const entry = this.resolveEntryFromDescriptor(this.readRuntimeDescriptor(runtimeDir));
+      const descriptor = this.readRuntimeDescriptor(runtimeDir);
+      const entry = this.resolveEntryFromDescriptor(descriptor)
+        ?? this.resolveBundledHermesAgentEntry(runtimeDir, descriptor);
       if (!entry?.command) continue;
       return {
         command: entry.command,

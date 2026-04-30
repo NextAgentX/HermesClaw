@@ -932,17 +932,18 @@ function writeDefaultRuntimeDescriptor(runtimeDir: string, version: string): voi
 }
 
 function writeDefaultOpenClawRuntimeDescriptor(runtimeDir: string, version: string): void {
-  const descriptorPath = join(runtimeDir, 'runtime.json');
-  if (existsSync(descriptorPath)) {
-    return;
-  }
-  writeJsonFile(descriptorPath, {
-    schemaVersion: 1,
+  // Idempotent rewriter: always writes the current default (schemaVersion: 2)
+  // so stale on-disk descriptors get refreshed whenever Apply Update or
+  // rollback flows reach this writer. Read-side migration in paths.ts
+  // (readOpenClawRuntimeDescriptor) covers the cold-start case where this
+  // writer is not invoked.
+  writeJsonFile(join(runtimeDir, 'runtime.json'), {
+    schemaVersion: 2,
     version,
     entry: {
       type: 'node',
       command: 'node',
-      args: ['dist/gateway.js'],
+      args: ['dist/entry.js'],
     },
     health: {
       url: 'http://127.0.0.1:18789/health',

@@ -176,6 +176,56 @@ describe('hermes standalone manager', () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
+  it('starts Hermes from the bundled HermesAgent runtime manifest when package metadata is present', async () => {
+    getHermesInstallStatusMock.mockReturnValue({
+      installed: true,
+      installMode: 'native',
+      endpoint: 'http://127.0.0.1:8642',
+      installPath: 'D:\\_04_OpenCode\\HermesClaw-Main\\build\\hermes-agent',
+      version: '0.11.0',
+    });
+    existsSyncMock.mockImplementation((path: unknown) =>
+      path === 'C:\\HermesClaw\\HermesClaw\\runtime-manifest.json'
+      || path === 'D:\\_04_OpenCode\\HermesClaw-Main\\build\\hermes-agent\\manifest.json'
+      || path === 'D:\\_04_OpenCode\\HermesClaw-Main\\build\\hermes-agent\\.venv\\Scripts\\python.exe',
+    );
+    readFileSyncMock.mockImplementation((path: unknown) => {
+      if (path === 'C:\\HermesClaw\\HermesClaw\\runtime-manifest.json') {
+        return JSON.stringify({
+          activeChannel: 'stable',
+          channels: {
+            stable: {
+              version: '0.11.0',
+              runtimeDir: 'D:\\_04_OpenCode\\HermesClaw-Main\\build\\hermes-agent',
+            },
+          },
+        });
+      }
+
+      return JSON.stringify({
+        packageName: 'hermes-agent',
+        version: '0.11.0',
+      });
+    });
+
+    const { getHermesStandaloneManager } = await import('@electron/runtime/services/hermes-standalone-manager');
+    await expect(getHermesStandaloneManager().start()).resolves.toBeUndefined();
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'D:\\_04_OpenCode\\HermesClaw-Main\\build\\hermes-agent\\.venv\\Scripts\\python.exe',
+      ['-m', 'hermes.gateway.run', '--port', '8642'],
+      expect.objectContaining({
+        cwd: 'D:\\_04_OpenCode\\HermesClaw-Main\\build\\hermes-agent',
+        windowsHide: true,
+        stdio: 'pipe',
+        env: expect.objectContaining({
+          HERMES_ENDPOINT: 'http://127.0.0.1:8642',
+          HERMES_PORT: '8642',
+        }),
+      }),
+    );
+  });
+
   it('stops an owned Hermes subprocess with SIGTERM', async () => {
     getHermesInstallStatusMock.mockReturnValue({
       installed: true,

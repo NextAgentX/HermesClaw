@@ -764,8 +764,8 @@ describe('runtime routes', () => {
     expect(checkOpenClawRuntimeUpdateMock).toHaveBeenCalledWith('beta');
     expect(applyOpenClawRuntimeUpdateMock).toHaveBeenCalledWith({ channel: 'beta', version: '1.3.0-beta.1' });
     expect(rollbackOpenClawRuntimeMock).toHaveBeenCalled();
-    expect(gatewayManager.reload).toHaveBeenCalledTimes(2);
-    expect(gatewayManager.restart).not.toHaveBeenCalled();
+    expect(gatewayManager.reload).not.toHaveBeenCalled();
+    expect(gatewayManager.restart).toHaveBeenCalledTimes(2);
     expect(gatewayManager.checkHealth).toHaveBeenCalledTimes(2);
     expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, expect.objectContaining({
       supported: true,
@@ -784,7 +784,7 @@ describe('runtime routes', () => {
       action: 'apply-update',
       version: '1.3.0-beta.1',
       backupId: 'openclaw-beta-1',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       gatewayHealth: { ok: true, uptime: 4 },
       gatewayStatus: expect.objectContaining({ state: 'running', gatewayReady: true }),
@@ -796,13 +796,13 @@ describe('runtime routes', () => {
       runtime: 'openclaw',
       action: 'rollback',
       restoredVersion: '1.2.3',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       snapshot,
     }));
   });
 
-  it('falls back to Gateway restart when OpenClaw update reload fails', async () => {
+  it('restarts Gateway after OpenClaw update apply', async () => {
     const snapshot = {
       runtime: { installChoice: 'openclaw', mode: 'openclaw', installedKinds: ['openclaw'] },
       bridge: { enabled: false, attached: false, hermesInstalled: false, hermesHealthy: false, openclawRecognized: false },
@@ -820,7 +820,7 @@ describe('runtime routes', () => {
       backupId: 'openclaw-stable-1',
     });
     const gatewayManager = {
-      reload: vi.fn().mockRejectedValue(new Error('SIGUSR1 unsupported')),
+      reload: vi.fn().mockResolvedValue(undefined),
       restart: vi.fn().mockResolvedValue(undefined),
       checkHealth: vi.fn().mockResolvedValue({ ok: true, uptime: 1 }),
       getStatus: vi.fn().mockReturnValue({ state: 'running', gatewayReady: true, pid: 5678 }),
@@ -836,7 +836,7 @@ describe('runtime routes', () => {
     );
 
     expect(handled).toBe(true);
-    expect(gatewayManager.reload).toHaveBeenCalledTimes(1);
+    expect(gatewayManager.reload).not.toHaveBeenCalled();
     expect(gatewayManager.restart).toHaveBeenCalledTimes(1);
     expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, expect.objectContaining({
       supported: true,
@@ -887,7 +887,8 @@ describe('runtime routes', () => {
 
     expect(handled).toBe(true);
     expect(rollbackOpenClawRuntimeMock).not.toHaveBeenCalled();
-    expect(gatewayManager.reload).toHaveBeenCalledTimes(1);
+    expect(gatewayManager.reload).not.toHaveBeenCalled();
+    expect(gatewayManager.restart).toHaveBeenCalledTimes(1);
     expect(gatewayManager.checkHealth).toHaveBeenCalledTimes(1);
     expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, expect.objectContaining({
       supported: true,
@@ -896,7 +897,7 @@ describe('runtime routes', () => {
       action: 'apply-update',
       version: '1.3.0',
       backupId: 'openclaw-stable-1',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       snapshot,
     }));
@@ -973,7 +974,8 @@ describe('runtime routes', () => {
 
     expect(handled).toBe(true);
     expect(rollbackOpenClawRuntimeMock).toHaveBeenCalledTimes(1);
-    expect(gatewayManager.reload).toHaveBeenCalledTimes(2);
+    expect(gatewayManager.reload).not.toHaveBeenCalled();
+    expect(gatewayManager.restart).toHaveBeenCalledTimes(2);
     expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, expect.objectContaining({
       supported: true,
       success: false,
@@ -983,7 +985,7 @@ describe('runtime routes', () => {
       rolledBack: true,
       restoredVersion: '1.2.3',
       rollbackBackupId: 'openclaw-stable-1',
-      gatewayRefreshAction: 'reload',
+      gatewayRefreshAction: 'restart',
       gatewayReady: true,
       error: expect.stringContaining('Gateway readiness failed'),
       snapshot,

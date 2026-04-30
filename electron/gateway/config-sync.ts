@@ -19,7 +19,7 @@ import { getAllSettings } from '../utils/store';
 import { isHermesClawBothMode } from '../runtime/mode-registry';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
-import { getOpenClawDir, getOpenClawEntryPath, isOpenClawPresent } from '../utils/paths';
+import { getOpenClawRuntimeDir, getOpenClawRuntimeEntryPath, isOpenClawRuntimePresent } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import {
   cleanupDanglingWeChatPluginState,
@@ -466,10 +466,10 @@ async function resolveChannelStartupPolicy(): Promise<{
 }
 
 export async function prepareGatewayLaunchContext(port: number): Promise<GatewayLaunchContext> {
-  const openclawDir = getOpenClawDir();
-  const entryScript = getOpenClawEntryPath();
+  const openclawDir = getOpenClawRuntimeDir();
+  const entryScript = getOpenClawRuntimeEntryPath();
 
-  if (!isOpenClawPresent()) {
+  if (!isOpenClawRuntimePresent()) {
     throw new Error(`OpenClaw package not found at: ${openclawDir}`);
   }
 

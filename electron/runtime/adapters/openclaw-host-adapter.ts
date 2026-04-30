@@ -3,7 +3,7 @@ import type {
   GatewayManager,
   GatewayStatus,
 } from '../../gateway/manager';
-import { getOpenClawStatus } from '../../utils/paths';
+import { getOpenClawRuntimeStatus } from '../../utils/paths';
 import type { InstallStatus, RuntimeStatus } from '../types';
 
 type GatewayManagerLike = Pick<GatewayManager,
@@ -31,7 +31,7 @@ export class OpenClawHostAdapter {
 
   constructor(
     private readonly gatewayManager: GatewayManagerLike,
-    private readonly readInstallStatus: typeof getOpenClawStatus = getOpenClawStatus,
+    private readonly readInstallStatus: typeof getOpenClawRuntimeStatus = getOpenClawRuntimeStatus,
   ) {}
 
   getGatewayStatus(): GatewayStatus {

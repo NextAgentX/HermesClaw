@@ -182,6 +182,47 @@ describe('runtime status service', () => {
     }));
   });
 
+  it('does not report hermes standalone mode as installed when install metadata is missing', async () => {
+    getHermesInstallStatusMock.mockReturnValue({
+      installed: false,
+      installMode: 'native',
+      endpoint: 'http://127.0.0.1:8642',
+      error: 'Hermes native home directory was not found at /home/test/.hermes',
+    });
+    getAllSettingsMock.mockResolvedValue({
+      runtime: {
+        installChoice: 'hermes',
+        mode: 'hermes',
+        installedKinds: ['hermes'],
+        lastStandaloneRuntime: 'hermes',
+      },
+      bridge: {
+        hermesAsOpenClawAgent: {
+          enabled: false,
+          attached: false,
+          hermesInstalled: false,
+          hermesHealthy: false,
+          openclawRecognized: false,
+          reasonCode: 'bridge_disabled',
+        },
+      },
+    });
+
+    const { getRuntimeFoundationSnapshot } = await import('@electron/runtime/services/runtime-status-service');
+    const snapshot = await getRuntimeFoundationSnapshot({
+      getStatus: () => ({ state: 'stopped', port: 18789, gatewayReady: false }),
+    } as never);
+
+    const hermes = snapshot.runtimes.find((runtime) => runtime.kind === 'hermes');
+    expect(hermes).toEqual(expect.objectContaining({
+      installed: false,
+      running: false,
+      healthy: false,
+      endpoint: 'http://127.0.0.1:8642',
+      error: 'Hermes native home directory was not found at /home/test/.hermes',
+    }));
+  });
+
   it('uses Hermes manager health when building hermes standalone runtime status', async () => {
     hermesManagerCheckHealthMock.mockResolvedValue({ ok: false, error: 'Hermes endpoint is unreachable' });
     getAllSettingsMock.mockResolvedValue({

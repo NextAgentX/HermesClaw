@@ -10,7 +10,7 @@ describe('HermesStandaloneAdapter', () => {
   it('maps hermes-only mode into standalone runtime health when install metadata is available', async () => {
     const { HermesStandaloneAdapter } = await import('@electron/runtime/adapters/hermes-standalone-adapter');
     const adapter = new HermesStandaloneAdapter((runtime) => ({
-      installed: runtime.installedKinds.includes('hermes'),
+      installed: true,
       installMode: 'wsl2',
       version: '1.2.3',
     }));
@@ -51,7 +51,7 @@ describe('HermesStandaloneAdapter', () => {
   it('uses bridge metadata when Hermes is present under OpenClaw primary mode', async () => {
     const { HermesStandaloneAdapter } = await import('@electron/runtime/adapters/hermes-standalone-adapter');
     const adapter = new HermesStandaloneAdapter((runtime) => ({
-      installed: runtime.installedKinds.includes('hermes'),
+      installed: true,
       installMode: 'native',
       installPath: '/home/test/.hermes',
     }));
@@ -80,6 +80,40 @@ describe('HermesStandaloneAdapter', () => {
       endpoint: '/home/test/.hermes',
       lastCheckedAt: 789,
       error: undefined,
+    });
+  });
+
+  it('does not mark Hermes standalone mode as installed from persisted runtime kinds alone', async () => {
+    const { HermesStandaloneAdapter } = await import('@electron/runtime/adapters/hermes-standalone-adapter');
+    const adapter = new HermesStandaloneAdapter(() => ({
+      installed: false,
+      installMode: 'native',
+      error: 'Hermes native home directory was not found at /home/test/.hermes',
+    }));
+
+    const runtime: RuntimeSettings = {
+      installChoice: 'hermes',
+      mode: 'hermes',
+      installedKinds: ['hermes'],
+      lastStandaloneRuntime: 'hermes',
+    };
+    const bridge: BridgeStatus = {
+      enabled: false,
+      attached: false,
+      hermesInstalled: false,
+      hermesHealthy: false,
+      openclawRecognized: false,
+    };
+
+    expect(adapter.buildRuntimeStatus(runtime, bridge, { checkedAt: 999 })).toEqual({
+      kind: 'hermes',
+      installed: false,
+      running: false,
+      healthy: false,
+      version: undefined,
+      endpoint: 'http://127.0.0.1:8642',
+      lastCheckedAt: 999,
+      error: 'Hermes native home directory was not found at /home/test/.hermes',
     });
   });
 

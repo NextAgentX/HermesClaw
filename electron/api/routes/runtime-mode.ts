@@ -79,7 +79,7 @@ interface OpenClawRollbackOutcome extends OpenClawRuntimeUpdateOutcome {
 }
 
 interface OpenClawGatewayReadiness {
-  gatewayRefreshAction: 'reload' | 'restart';
+  gatewayRefreshAction: 'restart';
   gatewayReady: boolean;
   gatewayHealth: GatewayHealthCheckResult;
   gatewayStatus: GatewayReadinessStatus;
@@ -165,26 +165,20 @@ async function waitForOpenClawGatewayRunning(ctx: HostApiContext): Promise<void>
   }
 }
 
-async function refreshOpenClawGateway(ctx: HostApiContext): Promise<OpenClawGatewayReadiness> {
-  let gatewayRefreshAction: OpenClawGatewayReadiness['gatewayRefreshAction'] = 'reload';
-  try {
-    await ctx.gatewayManager.reload();
-  } catch {
-    gatewayRefreshAction = 'restart';
-    await ctx.gatewayManager.restart();
-  }
+async function restartOpenClawGateway(ctx: HostApiContext): Promise<OpenClawGatewayReadiness> {
+  await ctx.gatewayManager.restart();
 
   await waitForOpenClawGatewayRunning(ctx);
 
   for (let attempt = 0; attempt < OPENCLAW_GATEWAY_READY_ATTEMPTS; attempt += 1) {
     const readiness = await readOpenClawGatewayReadiness(ctx);
     if (readiness.gatewayReady) {
-      return { gatewayRefreshAction, ...readiness };
+      return { gatewayRefreshAction: 'restart', ...readiness };
     }
     await sleep(OPENCLAW_GATEWAY_READY_INTERVAL_MS);
   }
 
-  return { gatewayRefreshAction, ...await readOpenClawGatewayReadiness(ctx) };
+  return { gatewayRefreshAction: 'restart', ...await readOpenClawGatewayReadiness(ctx) };
 }
 
 async function withOpenClawGatewayReadiness<T extends OpenClawRuntimeUpdateOutcome>(result: T, ctx: HostApiContext): Promise<T & Partial<OpenClawGatewayReadiness>> {
@@ -192,7 +186,7 @@ async function withOpenClawGatewayReadiness<T extends OpenClawRuntimeUpdateOutco
     return result;
   }
 
-  const readiness = await refreshOpenClawGateway(ctx);
+  const readiness = await restartOpenClawGateway(ctx);
   if (readiness.gatewayReady) {
     return { ...result, ...readiness };
   }
