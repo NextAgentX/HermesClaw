@@ -21,6 +21,7 @@ import 'zx/globals';
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
 const NODE_MODULES = path.join(ROOT, 'node_modules');
+const OPENCLAW_SOURCE_ROOT = path.join(ROOT, 'build', '.openclaw-source');
 
 // On Windows, pnpm virtual store paths can exceed MAX_PATH (260 chars).
 function normWin(p) {
@@ -31,10 +32,38 @@ function normWin(p) {
 
 echo`📦 Bundling openclaw for electron-builder...`;
 
+async function resolveOpenClawSource() {
+  const packageSpec = process.env.OPENCLAW_PACKAGE_SPEC?.trim()
+    || (process.env.OPENCLAW_VERSION?.trim() ? `openclaw@${process.env.OPENCLAW_VERSION.trim()}` : null);
+
+  if (!packageSpec) {
+    return {
+      nodeModules: NODE_MODULES,
+      packageLink: path.join(NODE_MODULES, 'openclaw'),
+    };
+  }
+
+  echo`   Using OpenClaw override: ${packageSpec}`;
+  await fs.remove(OPENCLAW_SOURCE_ROOT);
+  await fs.ensureDir(OPENCLAW_SOURCE_ROOT);
+  await fs.writeFile(
+    path.join(OPENCLAW_SOURCE_ROOT, 'package.json'),
+    `${JSON.stringify({ private: true, dependencies: {} }, null, 2)}\n`,
+  );
+  await $`pnpm add --prod --dir ${OPENCLAW_SOURCE_ROOT} ${packageSpec}`;
+
+  const sourceNodeModules = path.join(OPENCLAW_SOURCE_ROOT, 'node_modules');
+  return {
+    nodeModules: sourceNodeModules,
+    packageLink: path.join(sourceNodeModules, 'openclaw'),
+  };
+}
+
 // 1. Resolve the real path of node_modules/openclaw (follows pnpm symlink)
-const openclawLink = path.join(NODE_MODULES, 'openclaw');
+const openclawSource = await resolveOpenClawSource();
+const openclawLink = openclawSource.packageLink;
 if (!fs.existsSync(openclawLink)) {
-  echo`❌ node_modules/openclaw not found. Run pnpm install first.`;
+  echo`❌ node_modules/openclaw not found. Run pnpm install first or check OpenClaw override settings.`;
   process.exit(1);
 }
 
