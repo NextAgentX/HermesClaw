@@ -88,6 +88,8 @@ interface OpenClawGatewayReadiness {
 
 const OPENCLAW_GATEWAY_READY_ATTEMPTS = 12;
 const OPENCLAW_GATEWAY_READY_INTERVAL_MS = 250;
+const OPENCLAW_GATEWAY_STARTING_ATTEMPTS = 120;
+const OPENCLAW_GATEWAY_STARTING_INTERVAL_MS = 500;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -150,6 +152,19 @@ async function readOpenClawGatewayReadiness(ctx: HostApiContext): Promise<Pick<O
   };
 }
 
+async function waitForOpenClawGatewayRunning(ctx: HostApiContext): Promise<void> {
+  for (let attempt = 0; attempt < OPENCLAW_GATEWAY_STARTING_ATTEMPTS; attempt += 1) {
+    const status = ctx.gatewayManager.getStatus();
+    if (status.state === 'running') {
+      return;
+    }
+    if (status.state === 'error') {
+      return;
+    }
+    await sleep(OPENCLAW_GATEWAY_STARTING_INTERVAL_MS);
+  }
+}
+
 async function refreshOpenClawGateway(ctx: HostApiContext): Promise<OpenClawGatewayReadiness> {
   let gatewayRefreshAction: OpenClawGatewayReadiness['gatewayRefreshAction'] = 'reload';
   try {
@@ -158,6 +173,8 @@ async function refreshOpenClawGateway(ctx: HostApiContext): Promise<OpenClawGate
     gatewayRefreshAction = 'restart';
     await ctx.gatewayManager.restart();
   }
+
+  await waitForOpenClawGatewayRunning(ctx);
 
   for (let attempt = 0; attempt < OPENCLAW_GATEWAY_READY_ATTEMPTS; attempt += 1) {
     const readiness = await readOpenClawGatewayReadiness(ctx);

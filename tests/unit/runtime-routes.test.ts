@@ -849,6 +849,59 @@ describe('runtime routes', () => {
     }));
   });
 
+  it('waits for Gateway restart to finish before rolling back OpenClaw update apply', async () => {
+    const snapshot = {
+      runtime: { installChoice: 'openclaw', mode: 'openclaw', installedKinds: ['openclaw'] },
+      bridge: { enabled: false, attached: false, hermesInstalled: false, hermesHealthy: false, openclawRecognized: false },
+      runtimes: [{ kind: 'openclaw', installed: true, running: true, healthy: true, version: '1.3.0' }],
+    };
+    getRuntimeFoundationSnapshotMock.mockResolvedValue(snapshot);
+    parseJsonBodyMock.mockResolvedValue({ channel: 'stable', version: '1.3.0' });
+    applyOpenClawRuntimeUpdateMock.mockResolvedValue({
+      supported: true,
+      success: true,
+      runtime: 'openclaw',
+      action: 'apply-update',
+      channel: 'stable',
+      version: '1.3.0',
+      backupId: 'openclaw-stable-1',
+    });
+    const gatewayManager = {
+      reload: vi.fn().mockResolvedValue(undefined),
+      restart: vi.fn().mockResolvedValue(undefined),
+      checkHealth: vi.fn().mockResolvedValue({ ok: true, uptime: 1 }),
+      getStatus: vi.fn()
+        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
+        .mockReturnValue({ state: 'running', gatewayReady: true, pid: 5678, version: '1.3.0' }),
+      getDiagnostics: vi.fn().mockReturnValue({ consecutiveHeartbeatMisses: 0, consecutiveRpcFailures: 0 }),
+    };
+
+    const { handleRuntimeModeRoutes } = await import('@electron/api/routes/runtime-mode');
+    const handled = await handleRuntimeModeRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/runtime/openclaw/update/apply'),
+      { gatewayManager } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(rollbackOpenClawRuntimeMock).not.toHaveBeenCalled();
+    expect(gatewayManager.reload).toHaveBeenCalledTimes(1);
+    expect(gatewayManager.checkHealth).toHaveBeenCalledTimes(1);
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, expect.objectContaining({
+      supported: true,
+      success: true,
+      runtime: 'openclaw',
+      action: 'apply-update',
+      version: '1.3.0',
+      backupId: 'openclaw-stable-1',
+      gatewayRefreshAction: 'reload',
+      gatewayReady: true,
+      snapshot,
+    }));
+  });
+
   it('rolls back OpenClaw when Gateway never becomes ready after update apply', async () => {
     const snapshot = {
       runtime: { installChoice: 'openclaw', mode: 'openclaw', installedKinds: ['openclaw'] },
@@ -893,19 +946,19 @@ describe('runtime routes', () => {
         .mockResolvedValueOnce({ ok: false, error: 'connection refused' })
         .mockResolvedValue({ ok: true, uptime: 2 }),
       getStatus: vi.fn()
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
-        .mockReturnValueOnce({ state: 'starting', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
+        .mockReturnValueOnce({ state: 'running', gatewayReady: false })
         .mockReturnValue({ state: 'running', gatewayReady: true, pid: 5678, version: '1.2.3' }),
       getDiagnostics: vi.fn().mockReturnValue({ consecutiveHeartbeatMisses: 0, consecutiveRpcFailures: 0 }),
     };
