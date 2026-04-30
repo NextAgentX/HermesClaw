@@ -44,7 +44,7 @@ export async function getRuntimeFoundationSnapshot(
   const settings = await getAllSettings();
   const now = Date.now();
   const persistedRuntime = settings.runtime;
-  const mode = persistedRuntime?.mode ?? runtimeModeFromInstallChoice(persistedRuntime?.installChoice ?? 'openclaw');
+  const mode = persistedRuntime?.mode ?? runtimeModeFromInstallChoice(persistedRuntime?.installChoice ?? 'both');
   const installChoice = persistedRuntime?.installChoice ?? installChoiceFromMode(mode);
 
   const runtime: RuntimeSettings = {

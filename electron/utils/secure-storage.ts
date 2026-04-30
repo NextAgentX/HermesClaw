@@ -33,7 +33,15 @@ export interface ProviderConfig {
   name: string;
   type: ProviderType;
   baseUrl?: string;
-  apiProtocol?: 'openai-completions' | 'openai-responses' | 'anthropic-messages';
+  apiProtocol?:
+    | 'openai-completions'
+    | 'openai-responses'
+    | 'openai-codex-responses'
+    | 'azure-openai-responses'
+    | 'google-generative-ai'
+    | 'github-copilot'
+    | 'anthropic-messages'
+    | 'bedrock-converse-stream';
   headers?: Record<string, string>;
   model?: string;
   fallbackModels?: string[];

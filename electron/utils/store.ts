@@ -115,15 +115,15 @@ function createDefaultSettings(): AppSettings {
 
     // Runtime
     runtime: {
-      installChoice: 'openclaw',
-      mode: 'openclaw',
-      installedKinds: ['openclaw'],
+      installChoice: 'both',
+      mode: 'hermesclaw-both',
+      installedKinds: ['openclaw', 'hermes'],
       windowsHermesPreferredMode: 'wsl2',
       lastStandaloneRuntime: 'openclaw',
     },
     bridge: {
       hermesAsOpenClawAgent: {
-        enabled: false,
+        enabled: true,
         attached: false,
       },
     },
