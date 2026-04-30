@@ -121,12 +121,12 @@ HermesClaw/
 
 ## 致谢
 
-备注：这个项目的完成需要感谢Openclaw、HermesAgent和ClawX。
+备注：这个项目的完成需要感谢OpenClaw、HermesAgent和ClawX。
 
 同时也感谢相关开源社区的长期积累：
 
-- **Openclaw / OpenClaw**：为 HermesClaw 提供智能体运行时基础。
-- **HermesAgent**：为 Hermes 集成、智能体运行方式和桥接方向提供重要启发。
+- **OpenClaw**：为本项目提供智能体运行时基础。
+- **HermesAgent**：为项目提供 Hermes 集成、智能体运行方式和桥接方向提供重要启发。
 - **ClawX**：为桌面端产品形态、交互经验和项目基础提供了重要参考。
 
 也感谢所有提供想法、代码、测试和反馈的贡献者。

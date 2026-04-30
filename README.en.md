@@ -119,11 +119,11 @@ Issues, documentation improvements, translations, bug fixes, and feature suggest
 
 ## Acknowledgements
 
-HermesClaw was made possible with thanks to Openclaw, HermesAgent, and ClawX.
+HermesClaw was made possible with thanks to OpenClaw, HermesAgent, and ClawX.
 
 We also thank the broader open-source community:
 
-- **Openclaw / OpenClaw**: Provides the agent runtime foundation for HermesClaw.
+- **OpenClaw**: Provides the agent runtime foundation for HermesClaw.
 - **HermesAgent**: Inspired Hermes integration, agent runtime design, and bridge direction.
 - **ClawX**: Provided important references for the desktop product shape, interaction experience, and project foundation.
 
