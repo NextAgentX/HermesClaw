@@ -53,10 +53,10 @@ graph LR
 
 ## 主要能力
 
-- **图形化初始化**：通过首次启动向导配置语言、模型供应商、运行模式和内置技能。
+- **图形化初始化**：通过首次启动向导配置语言、模型供应商和内置技能；运行时默认使用 OpenClaw + Hermes 一体模式。
 - **智能体聊天工作台**：支持 Markdown 消息、历史记录和 `@agent` 路由，方便在不同智能体上下文之间切换。
-- **运行时管理**：支持 OpenClaw、Hermes，以及以 OpenClaw 为主控并接入 Hermes 的 `hermesclaw-both` 模式。
-- **模型供应商配置**：管理 API Key、OAuth、自定义 OpenAI 兼容端点和兼容性设置。
+- **运行时管理**：以 `hermesclaw-both` 为主模式管理 OpenClaw 与 Hermes，支持设置页安装、检查更新、应用更新、回滚和启动时更新提醒。
+- **模型供应商配置**：管理 API Key、OAuth、自定义 OpenAI 兼容端点、GitHub Copilot 授权和兼容性设置。
 - **技能与插件管理**：浏览、安装、启用和查看 OpenClaw 技能及其实际目录。
 - **渠道与定时任务**：配置外部渠道、账号绑定、智能体绑定和周期性任务。
 - **跨平台桌面体验**：基于 Electron、React 与 TypeScript，面向 macOS、Windows 和 Linux。
@@ -72,6 +72,16 @@ graph LR
 </p>
 
 ## 快速开始
+
+### 运行环境
+
+- **Node.js**：建议使用 Node.js 24，以保持与 CI 环境一致。
+- **Python**：HermesAgent 打包运行时使用 Python 3.11.10；`pnpm run init` 会下载 uv 运行时，构建或打包 HermesAgent 时会通过 uv 创建对应 Python 虚拟环境。
+- **包管理器**：使用 pnpm 10.31.0（项目已在 `packageManager` 中锁定版本）。
+- **操作系统**：支持 macOS、Windows 和 Linux；本地开发需准备对应平台的 Electron 运行环境。
+- **端口占用**：开发服务默认使用 `5173`，OpenClaw Gateway 默认使用 `18789`；如需调整，可参考 `.env.example`。
+- **OpenClaw 版本**：打包基线由 `package.json` 固定为 `openclaw@2026.4.27`；构建时可通过 `OPENCLAW_VERSION` 或 `OPENCLAW_PACKAGE_SPEC` 覆盖，第三方 OpenClaw 插件镜像由 `pnpm run bundle:openclaw-plugins` 打包。
+- **首次初始化**：首次运行前执行 `pnpm run init`，该命令会安装依赖并下载项目所需的 uv 运行时资源。
 
 请先克隆本仓库，然后在项目目录中执行：
 

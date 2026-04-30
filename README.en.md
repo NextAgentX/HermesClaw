@@ -51,10 +51,10 @@ graph LR
 
 ## Features
 
-- **Graphical onboarding**: Configure language, model providers, runtime mode, and built-in skills through the first-run setup flow.
+- **Graphical onboarding**: Configure language, model providers, and built-in skills through the first-run setup flow; the runtime defaults to the combined OpenClaw + Hermes mode.
 - **Agent chat workspace**: Use Markdown messages, conversation history, and `@agent` routing to switch between agent contexts.
-- **Runtime management**: Run OpenClaw, Hermes, or the `hermesclaw-both` mode where OpenClaw acts as the controller and integrates Hermes.
-- **Model provider configuration**: Manage API keys, OAuth, custom OpenAI-compatible endpoints, and compatibility settings.
+- **Runtime management**: Manage OpenClaw and Hermes through the primary `hermesclaw-both` mode, including Settings-based install, update checks, update application, rollback, and startup update prompts.
+- **Model provider configuration**: Manage API keys, OAuth, custom OpenAI-compatible endpoints, GitHub Copilot authorization, and compatibility settings.
 - **Skill and plugin management**: Browse, install, enable, and inspect OpenClaw skills and their on-disk directories.
 - **Channels and scheduled tasks**: Configure external channels, account bindings, agent bindings, and recurring jobs.
 - **Cross-platform desktop experience**: Built with Electron, React, and TypeScript for macOS, Windows, and Linux.
@@ -70,6 +70,16 @@ graph LR
 </p>
 
 ## Quick Start
+
+### Runtime environment
+
+- **Node.js**: Node.js 24 is recommended to match the CI environment.
+- **Python**: HermesAgent packaging uses Python 3.11.10; `pnpm run init` downloads the uv runtime, and HermesAgent builds/packages create the matching Python virtual environment through uv.
+- **Package manager**: Use pnpm 10.31.0, as locked by the project's `packageManager` field.
+- **Operating systems**: macOS, Windows, and Linux are supported; local development needs the Electron runtime environment for the target platform.
+- **Ports**: The development server uses `5173` by default, and OpenClaw Gateway uses `18789` by default. See `.env.example` if you need to change them.
+- **OpenClaw version**: The packaged baseline is pinned by `package.json` to `openclaw@2026.4.27`; builds can override it with `OPENCLAW_VERSION` or `OPENCLAW_PACKAGE_SPEC`, and third-party OpenClaw plugin mirrors are packaged by `pnpm run bundle:openclaw-plugins`.
+- **First-time initialization**: Run `pnpm run init` before first use. It installs dependencies and downloads the uv runtime resources required by the project.
 
 Clone this repository, then run the following commands in the project directory:
 
