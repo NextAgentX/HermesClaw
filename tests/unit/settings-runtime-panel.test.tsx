@@ -482,6 +482,7 @@ describe('Settings runtime panel', () => {
 
   it('renders runtime mode, installed runtimes, per-runtime status, and bridge state from runtime status', async () => {
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalled();
@@ -507,9 +508,6 @@ describe('Settings runtime panel', () => {
     expect(screen.getByTestId('settings-runtime-openclaw-start-button')).toBeDisabled();
     expect(screen.getByTestId('settings-runtime-openclaw-stop-button')).toBeEnabled();
     expect(screen.getByTestId('settings-runtime-openclaw-restart-button')).toBeEnabled();
-    expect(screen.getByTestId('settings-runtime-openclaw-update-check-button')).toBeEnabled();
-    expect(screen.getByTestId('settings-runtime-openclaw-update-apply-button')).toBeEnabled();
-    expect(screen.getByTestId('settings-runtime-openclaw-rollback-button')).toBeEnabled();
     expect(screen.getByTestId('settings-runtime-entry-hermes')).toHaveTextContent('gateway.runtimeLabels.hermes');
     expect(screen.getByTestId('settings-runtime-entry-hermes')).toHaveTextContent('common:stopped');
     expect(screen.getByTestId('settings-runtime-entry-hermes')).toHaveTextContent('gateway.runtimeHealthStates.degraded');
@@ -519,6 +517,7 @@ describe('Settings runtime panel', () => {
     expect(screen.getByTestId('settings-runtime-hermes-restart-button')).toBeEnabled();
     expect(screen.getByTestId('settings-runtime-bridge-error')).toHaveTextContent('awaiting attach');
     expect(screen.getByTestId('settings-runtime-config-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('HermesClaw Integration'));
     expect(screen.getByTestId('settings-hermesclaw-panel')).toBeInTheDocument();
     expect(screen.getByTestId('settings-hermesclaw-channel')).toHaveTextContent('stable');
     expect(screen.getByTestId('settings-hermesclaw-version')).toHaveTextContent('0.9.0');
@@ -528,6 +527,7 @@ describe('Settings runtime panel', () => {
 
   it('refreshes runtime status when the refresh button is clicked', async () => {
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalled();
@@ -542,6 +542,7 @@ describe('Settings runtime panel', () => {
 
   it('refreshes runtime status when gatewayReady changes while gateway state stays running', async () => {
     const { rerender } = render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalledTimes(1);
@@ -549,6 +550,7 @@ describe('Settings runtime panel', () => {
 
     gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
     rerender(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalledTimes(2);
@@ -589,6 +591,7 @@ describe('Settings runtime panel', () => {
     attachHermesOpenClawBridgeMock.mockResolvedValue(undefined);
 
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalled();
@@ -643,6 +646,7 @@ describe('Settings runtime panel', () => {
     recheckHermesOpenClawBridgeMock.mockResolvedValue(undefined);
 
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalled();
@@ -667,9 +671,16 @@ describe('Settings runtime panel', () => {
 
   it('persists Windows Hermes runtime configuration from the settings panel', async () => {
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(getRuntimeStatusMock).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByText('Runtime'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-runtime-mode-native')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('settings-runtime-mode-native'));
@@ -717,6 +728,7 @@ describe('Settings runtime panel', () => {
 
   it('runs HermesClaw local doctor, repair, logs, update, rollback, and dry-run sync actions', async () => {
     render(<Settings />);
+    fireEvent.click(screen.getByText('Advanced & Diagnostics'));
 
     await waitFor(() => {
       expect(getHermesClawLocalStatusMock).toHaveBeenCalled();
@@ -743,16 +755,37 @@ describe('Settings runtime panel', () => {
       'C:\\HermesClaw\\HermesClaw\\logs\\hermesclaw-doctor-2.json',
     );
 
+    fireEvent.click(screen.getByText('HermesClaw Integration'));
+
+    expect(screen.getByTestId('settings-hermes-agent-version')).toHaveTextContent('0.9.0');
+    expect(screen.getByTestId('settings-hermes-agent-status')).toHaveTextContent(
+      'Awaiting attach · awaiting attach',
+    );
+
     fireEvent.click(screen.getByTestId('settings-hermesclaw-open-logs-button'));
     await waitFor(() => {
       expect(openHermesClawLogsLocationMock).toHaveBeenCalled();
     });
 
+    fireEvent.click(screen.getByText('Updates'));
+
     fireEvent.click(screen.getByTestId('settings-hermesclaw-update-check-button'));
     await waitFor(() => {
       expect(checkHermesClawUpdateMock).toHaveBeenCalledWith('stable');
     });
-    expect(await screen.findByTestId('settings-hermesclaw-update-result')).toHaveTextContent('stable: 1.0.0');
+    expect(await screen.findByTestId('settings-hermesclaw-update-result')).toHaveTextContent(
+      'stable: 0.9.0 → 1.0.0 update available',
+    );
+
+    fireEvent.click(screen.getByTestId('settings-hermesclaw-update-check-button'));
+    await waitFor(() => {
+      expect(checkHermesClawUpdateMock).toHaveBeenCalledWith('stable');
+    });
+
+    fireEvent.click(screen.getByTestId('settings-hermesclaw-update-apply-button'));
+    await waitFor(() => {
+      expect(applyHermesClawUpdateMock).toHaveBeenCalledWith({ channel: 'stable', version: '1.0.0' });
+    });
 
     fireEvent.click(screen.getByTestId('settings-hermesclaw-update-apply-button'));
     await waitFor(() => {
@@ -763,6 +796,13 @@ describe('Settings runtime panel', () => {
     await waitFor(() => {
       expect(rollbackHermesClawRuntimeMock).toHaveBeenCalled();
     });
+
+    fireEvent.click(screen.getByTestId('settings-hermesclaw-rollback-button'));
+    await waitFor(() => {
+      expect(rollbackHermesClawRuntimeMock).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByText('HermesClaw Integration'));
 
     fireEvent.click(screen.getByTestId('settings-hermesclaw-sync-button'));
     await waitFor(() => {
@@ -797,29 +837,35 @@ describe('Settings runtime panel', () => {
     getRuntimeStatusMock.mockResolvedValueOnce(missingRuntimeStatus);
     installRuntimeMock.mockResolvedValue({
       success: true,
-      installChoice: 'openclaw',
-      steps: [{ id: 'openclaw', kind: 'runtime', status: 'completed', label: 'Install OpenClaw runtime' }],
+      installChoice: 'both',
+      steps: [
+        { id: 'openclaw', kind: 'runtime', status: 'completed', label: 'Install OpenClaw runtime' },
+        { id: 'hermes', kind: 'runtime', status: 'completed', label: 'Install Hermes runtime' },
+        { id: 'bridge', kind: 'bridge', status: 'completed', label: 'Attach Hermes bridge' },
+      ],
       snapshot: missingRuntimeStatus,
     });
 
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     expect(await screen.findByTestId('settings-runtime-openclaw-install-button')).toBeEnabled();
     expect(screen.getByTestId('settings-runtime-hermes-install-button')).toBeEnabled();
 
     fireEvent.click(screen.getByTestId('settings-runtime-openclaw-install-button'));
     await waitFor(() => {
-      expect(installRuntimeMock).toHaveBeenCalledWith('openclaw');
+      expect(installRuntimeMock).toHaveBeenCalledWith('both');
     });
 
     fireEvent.click(screen.getByTestId('settings-runtime-hermes-install-button'));
     await waitFor(() => {
-      expect(installRuntimeMock).toHaveBeenCalledWith('hermes');
+      expect(installRuntimeMock).toHaveBeenCalledWith('both');
     });
   });
 
   it('starts, stops, and restarts Hermes from the runtime card', async () => {
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-runtime-hermes-start-button')).toBeEnabled();
@@ -845,6 +891,7 @@ describe('Settings runtime panel', () => {
 
   it('starts, stops, restarts, and surfaces OpenClaw update actions', async () => {
     render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-runtime-openclaw-stop-button')).toBeEnabled();
@@ -866,6 +913,8 @@ describe('Settings runtime panel', () => {
     await waitFor(() => {
       expect(restartOpenClawRuntimeMock).toHaveBeenCalledTimes(1);
     });
+
+    fireEvent.click(screen.getByText('Updates'));
 
     fireEvent.click(screen.getByTestId('settings-runtime-openclaw-update-check-button'));
     await waitFor(() => {
@@ -929,6 +978,7 @@ describe('Settings runtime panel', () => {
     });
 
     render(<Settings />);
+    fireEvent.click(screen.getByText('Updates'));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-runtime-openclaw-update-apply-button')).toBeEnabled();

@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Settings Page
  * Application configuration
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sun,
   Moon,
@@ -79,6 +79,18 @@ type ControlUiInfo = {
   port: number;
 };
 
+type SettingsTab = 'overview' | 'appearance' | 'runtime' | 'updates' | 'integration' | 'advanced' | 'about';
+
+const settingsTabs: Array<{ id: SettingsTab; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'appearance', label: 'Appearance & Startup' },
+  { id: 'runtime', label: 'Runtime' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'integration', label: 'HermesClaw Integration' },
+  { id: 'advanced', label: 'Advanced & Diagnostics' },
+  { id: 'about', label: 'About' },
+];
+
 export function Settings() {
   const { t } = useTranslation('settings');
   const {
@@ -137,6 +149,7 @@ export function Settings() {
   const [hermesClawSyncResult, setHermesClawSyncResult] = useState<HermesClawSharedConfigSyncResult | null>(null);
   const [runtimeStatusLoading, setRuntimeStatusLoading] = useState(false);
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
+  const runtimeStatusRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const [bridgeActionLoading, setBridgeActionLoading] = useState<'attach' | 'recheck' | null>(null);
   const [openClawRuntimeActionLoading, setOpenClawRuntimeActionLoading] = useState<'install' | 'start' | 'stop' | 'restart' | 'check-update' | 'apply-update' | 'rollback' | null>(null);
   const [openClawUpdateResult, setOpenClawUpdateResult] = useState<OpenClawRuntimeUpdateResult | null>(null);
@@ -282,21 +295,36 @@ export function Settings() {
   };
 
   const refreshRuntimeStatus = useCallback(async () => {
-    setRuntimeStatusLoading(true);
+    if (runtimeStatusRefreshInFlightRef.current) {
+      return runtimeStatusRefreshInFlightRef.current;
+    }
+
+    const refreshPromise = (async () => {
+      setRuntimeStatusLoading(true);
+      try {
+        const [result, localStatus, sharedConfig] = await Promise.all([
+          getRuntimeStatus(),
+          getHermesClawLocalStatus(),
+          getHermesClawSharedConfig(),
+        ]);
+        setRuntimeStatus(result);
+        setHermesClawStatus(localStatus);
+        setHermesClawSharedConfig(sharedConfig);
+        setRuntimeStatusError(null);
+      } catch (error) {
+        setRuntimeStatusError(toUserMessage(error) || t('gateway.runtimeStatusLoadFailed'));
+      } finally {
+        setRuntimeStatusLoading(false);
+      }
+    })();
+
+    runtimeStatusRefreshInFlightRef.current = refreshPromise;
     try {
-      const [result, localStatus, sharedConfig] = await Promise.all([
-        getRuntimeStatus(),
-        getHermesClawLocalStatus(),
-        getHermesClawSharedConfig(),
-      ]);
-      setRuntimeStatus(result);
-      setHermesClawStatus(localStatus);
-      setHermesClawSharedConfig(sharedConfig);
-      setRuntimeStatusError(null);
-    } catch (error) {
-      setRuntimeStatusError(toUserMessage(error) || t('gateway.runtimeStatusLoadFailed'));
+      return await refreshPromise;
     } finally {
-      setRuntimeStatusLoading(false);
+      if (runtimeStatusRefreshInFlightRef.current === refreshPromise) {
+        runtimeStatusRefreshInFlightRef.current = null;
+      }
     }
   }, [t]);
 
@@ -423,26 +451,20 @@ export function Settings() {
     }
   };
 
-  const handleRuntimeInstall = async (runtimeKind: 'openclaw' | 'hermes') => {
-    const installChoice = runtimeKind;
-    if (runtimeKind === 'openclaw') {
-      setOpenClawRuntimeActionLoading('install');
-    } else {
-      setHermesRuntimeActionLoading('install');
-    }
+  const handleRuntimeInstall = async (_runtimeKind: 'openclaw' | 'hermes') => {
+    const installChoice = 'both';
+    setOpenClawRuntimeActionLoading('install');
+    setHermesRuntimeActionLoading('install');
 
     try {
       const result = await installRuntime(installChoice);
       await applyRuntimeInstallResult(result);
-      toast.success(`${runtimeKind === 'openclaw' ? 'OpenClaw' : 'Hermes'} runtime install completed`);
+      toast.success('OpenClaw + Hermes runtime install completed');
     } catch (error) {
-      toast.error(toUserMessage(error) || `Failed to install ${runtimeKind === 'openclaw' ? 'OpenClaw' : 'Hermes'} runtime`);
+      toast.error(toUserMessage(error) || 'Failed to install OpenClaw + Hermes runtime');
     } finally {
-      if (runtimeKind === 'openclaw') {
-        setOpenClawRuntimeActionLoading(null);
-      } else {
-        setHermesRuntimeActionLoading(null);
-      }
+      setOpenClawRuntimeActionLoading(null);
+      setHermesRuntimeActionLoading(null);
     }
   };
 
@@ -601,7 +623,11 @@ export function Settings() {
   }, [devModeUnlocked, showCliTools]);
 
   useEffect(() => {
-    void refreshRuntimeStatus();
+    const timeoutId = window.setTimeout(() => {
+      void refreshRuntimeStatus();
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
   }, [gatewayStatus.gatewayReady, gatewayStatus.state, refreshRuntimeStatus]);
 
   const handleCopyCliCommand = async () => {
@@ -839,37 +865,125 @@ export function Settings() {
 
   const hermesClawActiveChannel = hermesClawStatus?.manifest.activeChannel ?? 'stable';
   const hermesClawActiveRuntime = hermesClawStatus?.manifest.channels[hermesClawActiveChannel];
+  const hermesNativePathDisplay = windowsHermesNativePathDraft.trim()
+    || runtimeConfigSource.windowsHermesNativePath
+    || hermesClawStatus?.installStatus.installPath
+    || hermesClawActiveRuntime?.runtimeDir
+    || '%USERPROFILE%\\.hermes';
+  const hermesWslPathDisplay = windowsHermesWslDistroDraft.trim()
+    ? `~/.hermes (WSL:${windowsHermesWslDistroDraft.trim()})`
+    : '~/.hermes (WSL)';
+  const hermesPathDisplay = windowsHermesPreferredModeDraft === 'native'
+    ? hermesNativePathDisplay
+    : hermesWslPathDisplay;
+  const hermesAgentBridge = runtimeStatus?.bridge ?? hermesClawStatus?.bridge;
+  const hermesAgentRuntime = runtimeStatus?.runtimes.find((runtime) => runtime.kind === 'hermes');
+  const hermesAgentVersion = hermesClawStatus?.installStatus.version
+    || hermesClawStatus?.runtimeState.runtimes.hermes?.version
+    || hermesClawActiveRuntime?.version
+    || hermesAgentRuntime?.version
+    || '—';
+  const hermesAgentStatusLabel = hermesAgentBridge
+    ? !hermesAgentBridge.enabled
+      ? 'Disabled'
+      : hermesAgentBridge.attached
+        ? 'Attached'
+        : hermesAgentBridge.hermesInstalled
+          ? 'Awaiting attach'
+          : 'Not installed'
+    : '—';
+  const hermesAgentHealthLabel = hermesAgentBridge
+    ? hermesAgentBridge.hermesHealthy
+      ? 'Healthy'
+      : hermesAgentBridge.error ?? 'Needs attention'
+    : '—';
+  const hermesUpdateSummary = hermesClawUpdateResult
+    ? `${hermesClawUpdateResult.channel}: ${hermesClawUpdateResult.currentVersion ?? 'local'} → ${hermesClawUpdateResult.latestVersion ?? hermesClawUpdateResult.currentVersion ?? 'local'}${hermesClawUpdateResult.updateAvailable ? ' update available' : ' up to date'}${hermesClawUpdateResult.risk ? ` · risk ${hermesClawUpdateResult.risk}` : ''}${hermesClawUpdateResult.releaseNotes ? ` · ${hermesClawUpdateResult.releaseNotes}` : ''}`
+    : null;
   const hermesClawDoctorSummary = hermesClawDoctorResult
     ? hermesClawDoctorResult.checks.map((check) => `${check.label}: ${check.status}`).join(' · ')
     : null;
+  const openClawRuntime = runtimeStatus?.runtimes.find((item) => item.kind === 'openclaw') ?? null;
+  const hermesRuntime = runtimeStatus?.runtimes.find((item) => item.kind === 'hermes') ?? null;
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>('overview');
 
   return (
     <div data-testid="settings-page" className="flex flex-col -m-6 dark:bg-background h-[calc(100vh-2.5rem)] overflow-hidden">
-      <div className="w-full max-w-5xl mx-auto flex flex-col h-full p-10 pt-16">
+      <div className="w-full max-w-6xl mx-auto flex h-full">
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between mb-12 shrink-0 gap-4">
-          <div>
-            <h1 className="text-5xl md:text-6xl font-serif text-foreground mb-3 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
-              {t('title')}
-            </h1>
-            <p className="text-[17px] text-foreground/70 font-medium">
-              {t('subtitle')}
-            </p>
-          </div>
+        {/* Left Navigation */}
+        <div className="w-64 border-r border-black/10 dark:border-white/10 flex flex-col p-6 space-y-1 shrink-0 overflow-y-auto">
+          <h1 className="text-3xl font-serif text-foreground mb-8 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+            {t('title')}
+          </h1>
+          {settingsTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "text-left px-4 py-2 rounded-lg text-[15px] transition-colors",
+                activeTab === tab.id
+                  ? "bg-black/5 dark:bg-white/10 text-foreground font-medium"
+                  : "text-foreground/70 hover:bg-black/5 dark:hover:bg-white/5"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto pr-2 pb-10 min-h-0 -mr-2 space-y-12">
+        {/* Right Content Area */}
+        <div className="flex-1 overflow-y-auto p-10 pt-16 min-h-0">
+          
+          {activeTab === 'overview' && (
+            <div className="space-y-12">
+              <div className="mb-12">
+                <h2 className="text-4xl font-serif text-foreground mb-3 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>Overview</h2>
+                <p className="text-[17px] text-foreground/70 font-medium">{t('subtitle')}</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
+                  <Label className="text-[13px] text-muted-foreground">Gateway</Label>
+                  <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+                    {gatewayStatus.state}
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">{t('gateway.port')}: {gatewayStatus.port}</p>
+                </div>
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
+                  <Label className="text-[13px] text-muted-foreground">OpenClaw</Label>
+                  <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+                    {openClawRuntime?.running ? t('common:running') : openClawRuntime?.installed ? t('common:stopped') : 'Not installed'}
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">{openClawRuntime?.version ?? 'local'}</p>
+                </div>
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
+                  <Label className="text-[13px] text-muted-foreground">Hermes</Label>
+                  <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+                    {hermesRuntime?.running ? t('common:running') : hermesRuntime?.installed ? t('common:stopped') : 'Not installed'}
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">{hermesAgentVersion}</p>
+                </div>
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
+                  <Label className="text-[13px] text-muted-foreground">Bridge</Label>
+                  <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+                    {bridgeStateLabel}
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">{runtimeModeLabel}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* Appearance */}
-          <div>
-            <h2 className="text-3xl font-serif text-foreground mb-6 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+          {activeTab === 'appearance' && (
+            <div className="space-y-12">
+              <section className="space-y-6">
+            <h2 className="text-2xl md:text-3xl font-serif text-foreground font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
               {t('appearance.title')}
             </h2>
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label className="text-[15px] font-medium text-foreground/80">{t('appearance.theme')}</Label>
+            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex flex-col divide-y divide-black/5 dark:divide-white/5">
+              <div className="p-5 space-y-4">
+                <Label className="text-[15px] font-medium text-foreground/90">{t('appearance.theme')}</Label>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant={theme === 'light' ? 'secondary' : 'outline'}
@@ -897,8 +1011,8 @@ export function Settings() {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-3">
-                <Label className="text-[15px] font-medium text-foreground/80">{t('appearance.language')}</Label>
+              <div className="p-5 space-y-4">
+                <Label className="text-[15px] font-medium text-foreground/90">{t('appearance.language')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {SUPPORTED_LANGUAGES.map((lang) => (
                     <Button
@@ -912,9 +1026,9 @@ export function Settings() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <Label className="text-[15px] font-medium text-foreground/80">{t('appearance.launchAtStartup')}</Label>
+                  <Label className="text-[15px] font-medium text-foreground/90">{t('appearance.launchAtStartup')}</Label>
                   <p className="text-[13px] text-muted-foreground mt-1">
                     {t('appearance.launchAtStartupDesc')}
                   </p>
@@ -925,44 +1039,63 @@ export function Settings() {
                 />
               </div>
             </div>
-          </div>
+          </section>
 
           <Separator className="bg-black/5 dark:bg-white/5" />
+            </div>
+          )}
 
-          {/* Gateway */}
-          <div>
-            <h2 className="text-3xl font-serif text-foreground mb-6 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+          {activeTab === 'runtime' && (
+            <div className="space-y-12">
+              <section className="space-y-6">
+            <h2 className="text-2xl md:text-3xl font-serif text-foreground font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
               {t('gateway.title')}
             </h2>
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <Label className="text-[15px] font-medium text-foreground">{t('gateway.status')}</Label>
-                  <p className="text-[13px] text-muted-foreground mt-1">
-                    {t('gateway.port')}: {gatewayStatus.port}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border",
-                    gatewayStatus.state === 'running' ? "bg-green-500/10 text-green-600 dark:text-green-500 border-green-500/20" :
-                      gatewayStatus.state === 'error' ? "bg-red-500/10 text-red-600 dark:text-red-500 border-red-500/20" :
-                        "bg-black/5 dark:bg-white/5 text-muted-foreground border-transparent"
-                  )}>
-                    <div className={cn("w-1.5 h-1.5 rounded-full",
-                      gatewayStatus.state === 'running' ? "bg-green-500" :
-                        gatewayStatus.state === 'error' ? "bg-red-500" : "bg-muted-foreground"
-                    )} />
-                    {gatewayStatus.state}
+              
+              <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex flex-col divide-y divide-black/5 dark:divide-white/5">
+                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <Label className="text-[15px] font-medium text-foreground/90">{t('gateway.status')}</Label>
+                    <p className="text-[13px] text-muted-foreground mt-1">
+                      {t('gateway.port')}: {gatewayStatus.port}
+                    </p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={restartGateway} className="rounded-full h-8 px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5">
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    {t('common:actions.restart')}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleShowLogs} className="rounded-full h-8 px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5">
-                    <FileText className="h-3.5 w-3.5 mr-1.5" />
-                    {t('gateway.logs')}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border",
+                      gatewayStatus.state === 'running' ? "bg-green-500/10 text-green-600 dark:text-green-500 border-green-500/20" :
+                        gatewayStatus.state === 'error' ? "bg-red-500/10 text-red-600 dark:text-red-500 border-red-500/20" :
+                          "bg-black/5 dark:bg-white/5 text-muted-foreground border-transparent"
+                    )}>
+                      <div className={cn("w-1.5 h-1.5 rounded-full",
+                        gatewayStatus.state === 'running' ? "bg-green-500" :
+                          gatewayStatus.state === 'error' ? "bg-red-500" : "bg-muted-foreground"
+                      )} />
+                      {gatewayStatus.state}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={restartGateway} className="rounded-full h-8 px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5">
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      {t('common:actions.restart')}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleShowLogs} className="rounded-full h-8 px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5">
+                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                      {t('gateway.logs')}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-5 flex items-center justify-between gap-4">
+                  <div>
+                    <Label className="text-[15px] font-medium text-foreground/90">{t('gateway.autoStart')}</Label>
+                    <p className="text-[13px] text-muted-foreground mt-1">
+                      {t('gateway.autoStartDesc')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={gatewayAutoStart}
+                    onCheckedChange={setGatewayAutoStart}
+                  />
                 </div>
               </div>
 
@@ -1085,7 +1218,7 @@ export function Settings() {
                                 size="sm"
                                 variant="outline"
                                 data-testid="settings-runtime-hermes-install-button"
-                                disabled={hermesRuntimeActionLoading !== null}
+                                  disabled={hermesRuntimeActionLoading !== null || openClawRuntimeActionLoading !== null}
                                 onClick={() => void handleRuntimeInstall('hermes')}
                                 className="h-8 rounded-full px-3"
                               >
@@ -1146,7 +1279,7 @@ export function Settings() {
                                   size="sm"
                                   variant="outline"
                                   data-testid="settings-runtime-openclaw-install-button"
-                                  disabled={openClawRuntimeActionLoading !== null}
+                                  disabled={openClawRuntimeActionLoading !== null || hermesRuntimeActionLoading !== null}
                                   onClick={() => void handleRuntimeInstall('openclaw')}
                                   className="h-8 rounded-full px-3"
                                 >
@@ -1196,52 +1329,6 @@ export function Settings() {
                                 Restart
                               </Button>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                data-testid="settings-runtime-openclaw-update-check-button"
-                                disabled={!runtime.installed || openClawRuntimeActionLoading !== null}
-                                onClick={() => void handleOpenClawRuntimeAction('check-update')}
-                                className="h-8 rounded-full px-3"
-                              >
-                                Check Update
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                data-testid="settings-runtime-openclaw-update-apply-button"
-                                disabled={!runtime.installed || openClawRuntimeActionLoading !== null}
-                                onClick={() => void handleOpenClawRuntimeAction('apply-update')}
-                                className="h-8 rounded-full px-3"
-                              >
-                                Apply Update
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                data-testid="settings-runtime-openclaw-rollback-button"
-                                disabled={!runtime.installed || openClawRuntimeActionLoading !== null}
-                                onClick={() => void handleOpenClawRuntimeAction('rollback')}
-                                className="h-8 rounded-full px-3"
-                              >
-                                Rollback
-                              </Button>
-                            </div>
-                            {openClawUpdateResult && (
-                              <p className="text-[12px] text-muted-foreground" data-testid="settings-runtime-openclaw-update-result">
-                                {openClawUpdateResult.success === false
-                                  ? `${openClawUpdateResult.error ?? 'OpenClaw runtime management action failed'}${openClawUpdateResult.rolledBack && openClawUpdateResult.restoredVersion ? ` · rolled back to ${openClawUpdateResult.restoredVersion}` : ''}${openClawUpdateResult.rollbackError ? ` · rollback error ${openClawUpdateResult.rollbackError}` : ''}`
-                                  : openClawUpdateResult.action === 'check-update'
-                                  ? `${openClawUpdateResult.channel ?? 'stable'}: ${openClawUpdateResult.latestVersion ?? openClawUpdateResult.currentVersion ?? 'local'}${openClawUpdateResult.updateAvailable ? ' update available' : ' up to date'}${openClawUpdateResult.risk ? ` · risk ${openClawUpdateResult.risk}` : ''}${openClawUpdateResult.releaseNotes ? ` · ${openClawUpdateResult.releaseNotes}` : ''}`
-                                  : openClawUpdateResult.action === 'apply-update'
-                                    ? `Applied OpenClaw ${openClawUpdateResult.version ?? 'runtime'}${openClawUpdateResult.backupId ? ` · backup ${openClawUpdateResult.backupId}` : ''}${openClawUpdateResult.gatewayRefreshAction ? ` · Gateway ${openClawUpdateResult.gatewayRefreshAction}${openClawUpdateResult.gatewayReady ? ' ready' : ' not ready'}` : ''}`
-                                    : `Rolled back OpenClaw to ${openClawUpdateResult.restoredVersion ?? 'previous runtime'}${openClawUpdateResult.backupId ? ` · backup ${openClawUpdateResult.backupId}` : ''}${openClawUpdateResult.gatewayRefreshAction ? ` · Gateway ${openClawUpdateResult.gatewayRefreshAction}${openClawUpdateResult.gatewayReady ? ' ready' : ' not ready'}` : ''}`}
-                              </p>
-                            )}
                           </div>
                         )}
 
@@ -1300,9 +1387,12 @@ export function Settings() {
                         data-testid="settings-runtime-native-path"
                         value={windowsHermesNativePathDraft}
                         onChange={(event) => setWindowsHermesNativePathDraft(event.target.value)}
-                        placeholder="C:\\Hermes\\.hermes"
+                        placeholder="%USERPROFILE%\\.hermes"
                       />
                       <p className="text-[12px] text-muted-foreground">{t('gateway.runtimeWindowsNativePathHelp')}</p>
+                      <p className="text-[12px] text-muted-foreground break-all" data-testid="settings-runtime-hermes-path-display">
+                        Hermes default path: {hermesPathDisplay}
+                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -1335,98 +1425,6 @@ export function Settings() {
                     </div>
                   </div>
                 )}
-
-                <div
-                  data-testid="settings-hermesclaw-panel"
-                  className="rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4 space-y-4"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-[13px] text-foreground/80">HermesClaw Local Integration</Label>
-                      <p className="text-[12px] text-muted-foreground break-all" data-testid="settings-hermesclaw-root">
-                        {hermesClawStatus?.layout.rootDir ?? '—'}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="rounded-full px-3 py-1 bg-white dark:bg-card border-black/5 dark:border-white/5" data-testid="settings-hermesclaw-channel">
-                      {hermesClawActiveChannel}
-                    </Badge>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="space-y-1">
-                      <p className="text-[12px] text-muted-foreground">Active version</p>
-                      <p className="text-[13px] text-foreground" data-testid="settings-hermesclaw-version">
-                        {hermesClawActiveRuntime?.version ?? '—'}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[12px] text-muted-foreground">Shared config</p>
-                      <p className="text-[13px] text-foreground" data-testid="settings-hermesclaw-shared-config-count">
-                        {(hermesClawSharedConfig?.skills.length ?? 0)
-                          + (hermesClawSharedConfig?.agents.length ?? 0)
-                          + (hermesClawSharedConfig?.rules.length ?? 0)
-                          + (hermesClawSharedConfig?.providers.length ?? 0)
-                          + (hermesClawSharedConfig?.tools.length ?? 0)
-                          + (hermesClawSharedConfig?.hooks.length ?? 0)} entries
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[12px] text-muted-foreground">Install status</p>
-                      <p className="text-[13px] text-foreground" data-testid="settings-hermesclaw-install-status">
-                        {hermesClawStatus?.installStatus.installed ? 'Installed' : 'Not installed'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-doctor-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawDoctor()} className="rounded-full h-8 px-4">
-                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'doctor' && 'animate-spin')} />
-                      Run Doctor
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-repair-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawRepair()} className="rounded-full h-8 px-4">
-                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'repair' && 'animate-spin')} />
-                      Repair Install
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-open-logs-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawOpenLogs()} className="rounded-full h-8 px-4">
-                      Open Logs
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-check-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawCheckUpdate()} className="rounded-full h-8 px-4">
-                      Check Update
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-apply-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawApplyUpdate()} className="rounded-full h-8 px-4">
-                      Apply Update
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-rollback-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawRollback()} className="rounded-full h-8 px-4">
-                      Rollback
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-sync-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawSync()} className="rounded-full h-8 px-4">
-                      Dry-run Sync
-                    </Button>
-                  </div>
-
-                  {hermesClawDoctorSummary && (
-                    <div className="space-y-1 text-[12px] text-muted-foreground">
-                      <p data-testid="settings-hermesclaw-doctor-result">
-                        {hermesClawDoctorSummary}
-                      </p>
-                      {hermesClawDoctorResult?.reportPath && (
-                        <p className="break-all" data-testid="settings-hermesclaw-report-path">
-                          Diagnostic report: {hermesClawDoctorResult.reportPath}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {hermesClawUpdateResult && (
-                    <p className="text-[12px] text-muted-foreground" data-testid="settings-hermesclaw-update-result">
-                      {hermesClawUpdateResult.channel}: {hermesClawUpdateResult.latestVersion ?? hermesClawUpdateResult.currentVersion ?? 'local'}
-                    </p>
-                  )}
-                  {hermesClawSyncResult && (
-                    <p className="text-[12px] text-muted-foreground" data-testid="settings-hermesclaw-sync-log">
-                      {hermesClawSyncResult.log.join(' · ')}
-                    </p>
-                  )}
-                </div>
 
                 {runtimeStatus?.bridge.error && (
                   <p className="text-[12px] text-muted-foreground" data-testid="settings-runtime-bridge-error">
@@ -1481,53 +1479,150 @@ export function Settings() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-[15px] font-medium text-foreground">{t('gateway.autoStart')}</Label>
-                  <p className="text-[13px] text-muted-foreground mt-1">
-                    {t('gateway.autoStartDesc')}
-                  </p>
-                </div>
-                <Switch
-                  checked={gatewayAutoStart}
-                  onCheckedChange={setGatewayAutoStart}
-                />
-              </div>
-
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-[15px] font-medium text-foreground">{t('advanced.devMode')}</Label>
-                  <p className="text-[13px] text-muted-foreground mt-1">
-                    {t('advanced.devModeDesc')}
-                  </p>
-                </div>
-                <Switch
-                  checked={devModeUnlocked}
-                  onCheckedChange={setDevModeUnlocked}
-                  data-testid="settings-dev-mode-switch"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-[15px] font-medium text-foreground">{t('advanced.telemetry')}</Label>
-                  <p className="text-[13px] text-muted-foreground mt-1">
-                    {t('advanced.telemetryDesc')}
-                  </p>
-                </div>
-                <Switch
-                  checked={telemetryEnabled}
-                  onCheckedChange={setTelemetryEnabled}
-                />
-              </div>
-
             </div>
-          </div>
+          </section>
+            </div>
+          )}
 
+          {activeTab === 'integration' && (
+            <div className="space-y-12">
+              <h2 className="text-2xl md:text-3xl font-serif text-foreground font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+                HermesClaw Integration
+              </h2>
+              <div
+                data-testid="settings-hermesclaw-panel"
+                className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-5"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[15px] font-medium text-foreground/90">HermesClaw Local Integration</Label>
+                    <p className="text-[12px] text-muted-foreground break-all" data-testid="settings-hermesclaw-root">
+                      {hermesClawStatus?.layout.rootDir ?? '—'}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="rounded-full px-3 py-1 bg-white dark:bg-card border-black/5 dark:border-white/5" data-testid="settings-hermesclaw-channel">
+                    {hermesClawActiveChannel}
+                  </Badge>
+                </div>
 
-          {/* Developer */}
-          {devModeUnlocked && (
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="space-y-1 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
+                    <p className="text-[12px] text-muted-foreground">Active version</p>
+                    <p className="text-[13px] text-foreground" data-testid="settings-hermesclaw-version">
+                      {hermesClawActiveRuntime?.version ?? '—'}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
+                    <p className="text-[12px] text-muted-foreground">Shared config</p>
+                    <p className="text-[13px] text-foreground" data-testid="settings-hermesclaw-shared-config-count">
+                      {(hermesClawSharedConfig?.skills.length ?? 0)
+                        + (hermesClawSharedConfig?.agents.length ?? 0)
+                        + (hermesClawSharedConfig?.rules.length ?? 0)
+                        + (hermesClawSharedConfig?.providers.length ?? 0)
+                        + (hermesClawSharedConfig?.tools.length ?? 0)
+                        + (hermesClawSharedConfig?.hooks.length ?? 0)} entries
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
+                    <p className="text-[12px] text-muted-foreground">Install status</p>
+                    <p className="text-[13px] text-foreground" data-testid="settings-hermesclaw-install-status">
+                      {hermesClawStatus?.installStatus.installed ? 'Installed' : 'Not installed'}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
+                    <p className="text-[12px] text-muted-foreground">HermesAgent</p>
+                    <p className="text-[13px] text-foreground" data-testid="settings-hermes-agent-version">
+                      {hermesAgentVersion}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground" data-testid="settings-hermes-agent-status">
+                      {hermesAgentStatusLabel} · {hermesAgentHealthLabel}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-open-logs-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawOpenLogs()} className="rounded-full h-8 px-4">
+                    Open Logs
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-sync-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawSync()} className="rounded-full h-8 px-4">
+                    Dry-run Sync
+                  </Button>
+                </div>
+
+                {hermesClawSyncResult && (
+                  <p className="text-[12px] text-muted-foreground" data-testid="settings-hermesclaw-sync-log">
+                    {hermesClawSyncResult.log.join(' · ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'advanced' && (
+            <div className="space-y-12">
+              <section className="space-y-6">
+                <h2 className="text-2xl md:text-3xl font-serif text-foreground font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+                  Advanced & Diagnostics
+                </h2>
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex flex-col divide-y divide-black/5 dark:divide-white/5">
+                  <div className="p-5 flex items-center justify-between gap-4">
+                    <div>
+                      <Label className="text-[15px] font-medium text-foreground/90">{t('advanced.devMode')}</Label>
+                      <p className="text-[13px] text-muted-foreground mt-1">
+                        {t('advanced.devModeDesc')}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={devModeUnlocked}
+                      onCheckedChange={setDevModeUnlocked}
+                      data-testid="settings-dev-mode-switch"
+                    />
+                  </div>
+
+                  <div className="p-5 flex items-center justify-between gap-4">
+                    <div>
+                      <Label className="text-[15px] font-medium text-foreground/90">{t('advanced.telemetry')}</Label>
+                      <p className="text-[13px] text-muted-foreground mt-1">
+                        {t('advanced.telemetryDesc')}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={telemetryEnabled}
+                      onCheckedChange={setTelemetryEnabled}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-4">
+                  <div>
+                    <Label className="text-[15px] font-medium text-foreground/90">HermesClaw Doctor</Label>
+                    <p className="text-[13px] text-muted-foreground mt-1">Repair and diagnostic tools for local HermesAgent integration.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-doctor-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawDoctor()} className="rounded-full h-8 px-4">
+                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'doctor' && 'animate-spin')} />
+                      Run Doctor
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-repair-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawRepair()} className="rounded-full h-8 px-4">
+                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'repair' && 'animate-spin')} />
+                      Repair Install
+                    </Button>
+                  </div>
+                  {hermesClawDoctorSummary && (
+                    <div className="space-y-1 text-[12px] text-muted-foreground">
+                      <p data-testid="settings-hermesclaw-doctor-result">
+                        {hermesClawDoctorSummary}
+                      </p>
+                      {hermesClawDoctorResult?.reportPath && (
+                        <p className="break-all" data-testid="settings-hermesclaw-report-path">
+                          Diagnostic report: {hermesClawDoctorResult.reportPath}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+              {devModeUnlocked && (
             <>
               <Separator className="bg-black/5 dark:bg-white/5" />
               <div data-testid="settings-developer-section">
@@ -1901,18 +1996,105 @@ export function Settings() {
           )}
 
           <Separator className="bg-black/5 dark:bg-white/5" />
+            </div>
+          )}
 
-          {/* Updates */}
-          <div>
-            <h2 className="text-3xl font-serif text-foreground mb-6 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
+          {activeTab === 'updates' && (
+            <div className="space-y-12">
+              <section className="space-y-6">
+            <h2 className="text-2xl md:text-3xl font-serif text-foreground font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
               {t('updates.title')}
             </h2>
-            <div className="space-y-6">
-              <UpdateSettings />
+            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 flex flex-col divide-y divide-black/5 dark:divide-white/5">
+              <div className="p-5">
+                <UpdateSettings />
+              </div>
+              <div className="p-5 space-y-5">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
+                  <div>
+                    <Label className="text-[15px] font-medium text-foreground/90">OpenClaw Runtime</Label>
+                    <p className="text-[12px] text-muted-foreground mt-1">
+                      {openClawRuntime?.version ?? 'local'} · {openClawRuntime?.installed ? 'Installed' : 'Not installed'}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      data-testid="settings-runtime-openclaw-update-check-button"
+                      disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
+                      onClick={() => void handleOpenClawRuntimeAction('check-update')}
+                      className="h-8 rounded-full px-3"
+                    >
+                      Check Update
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      data-testid="settings-runtime-openclaw-update-apply-button"
+                      disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
+                      onClick={() => void handleOpenClawRuntimeAction('apply-update')}
+                      className="h-8 rounded-full px-3"
+                    >
+                      Apply Update
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      data-testid="settings-runtime-openclaw-rollback-button"
+                      disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
+                      onClick={() => void handleOpenClawRuntimeAction('rollback')}
+                      className="h-8 rounded-full px-3"
+                    >
+                      Rollback
+                    </Button>
+                  </div>
+                </div>
+                {openClawUpdateResult && (
+                  <p className="text-[12px] text-muted-foreground" data-testid="settings-runtime-openclaw-update-result">
+                    {openClawUpdateResult.success === false
+                      ? `${openClawUpdateResult.error ?? 'OpenClaw runtime management action failed'}${openClawUpdateResult.rolledBack && openClawUpdateResult.restoredVersion ? ` · rolled back to ${openClawUpdateResult.restoredVersion}` : ''}${openClawUpdateResult.rollbackError ? ` · rollback error ${openClawUpdateResult.rollbackError}` : ''}`
+                      : openClawUpdateResult.action === 'check-update'
+                        ? `${openClawUpdateResult.channel ?? 'stable'}: ${openClawUpdateResult.latestVersion ?? openClawUpdateResult.currentVersion ?? 'local'}${openClawUpdateResult.updateAvailable ? ' update available' : ' up to date'}${openClawUpdateResult.risk ? ` · risk ${openClawUpdateResult.risk}` : ''}${openClawUpdateResult.releaseNotes ? ` · ${openClawUpdateResult.releaseNotes}` : ''}`
+                        : openClawUpdateResult.action === 'apply-update'
+                          ? `Applied OpenClaw ${openClawUpdateResult.version ?? 'runtime'}${openClawUpdateResult.backupId ? ` · backup ${openClawUpdateResult.backupId}` : ''}${openClawUpdateResult.gatewayRefreshAction ? ` · Gateway ${openClawUpdateResult.gatewayRefreshAction}${openClawUpdateResult.gatewayReady ? ' ready' : ' not ready'}` : ''}`
+                          : `Rolled back OpenClaw to ${openClawUpdateResult.restoredVersion ?? 'previous runtime'}${openClawUpdateResult.backupId ? ` · backup ${openClawUpdateResult.backupId}` : ''}${openClawUpdateResult.gatewayRefreshAction ? ` · Gateway ${openClawUpdateResult.gatewayRefreshAction}${openClawUpdateResult.gatewayReady ? ' ready' : ' not ready'}` : ''}`}
+                  </p>
+                )}
 
-              <div className="flex items-center justify-between">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-card p-4">
+                  <div>
+                    <Label className="text-[15px] font-medium text-foreground/90">HermesAgent Runtime</Label>
+                    <p className="text-[12px] text-muted-foreground mt-1">
+                      {hermesAgentVersion} · {hermesAgentStatusLabel}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-check-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawCheckUpdate()} className="rounded-full h-8 px-4">
+                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'check-update' && 'animate-spin')} />
+                      Check Update
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-apply-button" disabled={hermesClawActionLoading != null || hermesClawUpdateResult?.updateAvailable !== true} onClick={() => void handleHermesClawApplyUpdate()} className="rounded-full h-8 px-4">
+                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'apply-update' && 'animate-spin')} />
+                      Apply Update
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-rollback-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawRollback()} className="rounded-full h-8 px-4">
+                      Rollback
+                    </Button>
+                  </div>
+                </div>
+                {hermesUpdateSummary && (
+                  <p className="text-[12px] text-muted-foreground" data-testid="settings-hermesclaw-update-result">
+                    {hermesUpdateSummary.replace(/ 路 /g, ' · ')}
+                  </p>
+                )}
+              </div>
+              <div className="p-5 flex items-center justify-between gap-4">
                 <div>
-                  <Label className="text-[15px] font-medium text-foreground">{t('updates.autoCheck')}</Label>
+                  <Label className="text-[15px] font-medium text-foreground/90">{t('updates.autoCheck')}</Label>
                   <p className="text-[13px] text-muted-foreground mt-1">
                     {t('updates.autoCheckDesc')}
                   </p>
@@ -1922,10 +2104,9 @@ export function Settings() {
                   onCheckedChange={setAutoCheckUpdate}
                 />
               </div>
-
-              <div className="flex items-center justify-between">
+              <div className="p-5 flex items-center justify-between gap-4">
                 <div>
-                  <Label className="text-[15px] font-medium text-foreground">{t('updates.autoDownload')}</Label>
+                  <Label className="text-[15px] font-medium text-foreground/90">{t('updates.autoDownload')}</Label>
                   <p className="text-[13px] text-muted-foreground mt-1">
                     {t('updates.autoDownloadDesc')}
                   </p>
@@ -1939,12 +2120,15 @@ export function Settings() {
                 />
               </div>
             </div>
-          </div>
+          </section>
 
           <Separator className="bg-black/5 dark:bg-white/5" />
+            </div>
+          )}
 
-          {/* About */}
-          <div>
+          {activeTab === 'about' && (
+            <div className="space-y-12">
+              <div>
             <h2 className="text-3xl font-serif text-foreground mb-6 font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
               {t('about.title')}
             </h2>
@@ -1979,11 +2163,11 @@ export function Settings() {
               </div>
             </div>
           </div>
+            </div>
+          )}
 
         </div>
       </div>
     </div>
   );
 }
-
-export default Settings;
