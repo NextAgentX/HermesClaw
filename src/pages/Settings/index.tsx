@@ -44,6 +44,7 @@ import {
   attachHermesOpenClawBridge,
   checkOpenClawUpdate,
   checkHermesClawUpdate,
+  detachHermesOpenClawBridge,
   getHermesClawLocalStatus,
   getHermesClawSharedConfig,
   getRuntimeStatus,
@@ -150,7 +151,7 @@ export function Settings() {
   const [runtimeStatusLoading, setRuntimeStatusLoading] = useState(false);
   const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
   const runtimeStatusRefreshInFlightRef = useRef<Promise<void> | null>(null);
-  const [bridgeActionLoading, setBridgeActionLoading] = useState<'attach' | 'recheck' | null>(null);
+  const [bridgeActionLoading, setBridgeActionLoading] = useState<'attach' | 'detach' | 'recheck' | null>(null);
   const [openClawRuntimeActionLoading, setOpenClawRuntimeActionLoading] = useState<'install' | 'start' | 'stop' | 'restart' | 'check-update' | 'apply-update' | 'rollback' | null>(null);
   const [openClawUpdateResult, setOpenClawUpdateResult] = useState<OpenClawRuntimeUpdateResult | null>(null);
   const [hermesRuntimeActionLoading, setHermesRuntimeActionLoading] = useState<'install' | 'start' | 'stop' | 'restart' | null>(null);
@@ -525,16 +526,24 @@ export function Settings() {
     }
   };
 
-  const handleBridgeAction = async (action: 'attach' | 'recheck') => {
+  const handleBridgeAction = async (action: 'attach' | 'detach' | 'recheck') => {
     setBridgeActionLoading(action);
     try {
       if (action === 'attach') {
         await attachHermesOpenClawBridge();
+      } else if (action === 'detach') {
+        await detachHermesOpenClawBridge();
       } else {
         await recheckHermesOpenClawBridge();
       }
       await refreshRuntimeStatus();
-      toast.success(action === 'attach' ? t('gateway.bridgeAttachSucceeded') : t('gateway.bridgeRecheckSucceeded'));
+      toast.success(
+        action === 'attach'
+          ? t('gateway.bridgeAttachSucceeded')
+          : action === 'detach'
+            ? 'Bridge disconnected'
+            : t('gateway.bridgeRecheckSucceeded'),
+      );
     } catch (error) {
       toast.error(toUserMessage(error) || t('gateway.runtimeStatusLoadFailed'));
     } finally {
@@ -958,7 +967,7 @@ export function Settings() {
                   <p className="text-[12px] text-muted-foreground">{openClawRuntime?.version ?? 'local'}</p>
                 </div>
                 <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
-                  <Label className="text-[13px] text-muted-foreground">Hermes</Label>
+                  <Label className="text-[13px] text-muted-foreground">HermesAgent</Label>
                   <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
                     {hermesRuntime?.running ? t('common:running') : hermesRuntime?.installed ? t('common:stopped') : 'Not installed'}
                   </div>
@@ -1198,7 +1207,7 @@ export function Settings() {
                           </div>
                         </div>
 
-                        {runtime.version && (
+                        {runtime.version && runtime.kind !== 'openclaw' && (
                           <p className="text-[12px] text-muted-foreground">
                             {t('settings:updates.currentVersion')}: {runtime.version}
                           </p>
@@ -1443,6 +1452,19 @@ export function Settings() {
                       className="rounded-full h-8 px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5"
                     >
                       {t('gateway.bridgeAttach')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleBridgeAction('detach')}
+                      data-testid="settings-runtime-bridge-detach-button"
+                      disabled={bridgeActionLoading != null || !runtimeStatus.bridge.attached}
+                      className="rounded-full h-8 px-4 border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      {bridgeActionLoading === 'detach' ? (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : null}
+                      Disconnect Bridge
                     </Button>
                     <Button
                       variant="outline"
@@ -2069,7 +2091,7 @@ export function Settings() {
                   <div>
                     <Label className="text-[15px] font-medium text-foreground/90">HermesAgent Runtime</Label>
                     <p className="text-[12px] text-muted-foreground mt-1">
-                      {hermesAgentVersion} · {hermesAgentStatusLabel}
+                      Version {hermesAgentVersion} · {hermesAgentStatusLabel}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -2077,7 +2099,7 @@ export function Settings() {
                       <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'check-update' && 'animate-spin')} />
                       Check Update
                     </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-apply-button" disabled={hermesClawActionLoading != null || hermesClawUpdateResult?.updateAvailable !== true} onClick={() => void handleHermesClawApplyUpdate()} className="rounded-full h-8 px-4">
+                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-apply-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawApplyUpdate()} className="rounded-full h-8 px-4">
                       <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'apply-update' && 'animate-spin')} />
                       Apply Update
                     </Button>
@@ -2156,7 +2178,7 @@ export function Settings() {
                 <Button
                   variant="link"
                   className="h-auto p-0 text-[14px] text-blue-500 hover:text-blue-600 font-medium"
-                  onClick={() => window.electron.openExternal('https://icnnp7d0dymg.feishu.cn/wiki/UyfOwQ2cAiJIP6kqUW8cte5Bnlc')}
+                  onClick={() => window.electron.openExternal('https://github.com/NextAgentX/HermesClaw/issues')}
                 >
                   {t('about.faq')}
                 </Button>

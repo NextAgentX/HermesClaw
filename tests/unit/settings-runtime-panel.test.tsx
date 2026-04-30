@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { Settings } from '../../src/pages/Settings/index';
 
@@ -26,6 +26,7 @@ const startHermesRuntimeMock = vi.fn();
 const stopHermesRuntimeMock = vi.fn();
 const restartHermesRuntimeMock = vi.fn();
 const attachHermesOpenClawBridgeMock = vi.fn();
+const detachHermesOpenClawBridgeMock = vi.fn();
 const recheckHermesOpenClawBridgeMock = vi.fn();
 const invokeIpcMock = vi.fn();
 const getGatewayWsDiagnosticEnabledMock = vi.fn();
@@ -135,6 +136,7 @@ vi.mock('@/lib/host-api', () => ({
   stopHermesRuntime: (...args: unknown[]) => stopHermesRuntimeMock(...args),
   restartHermesRuntime: (...args: unknown[]) => restartHermesRuntimeMock(...args),
   attachHermesOpenClawBridge: (...args: unknown[]) => attachHermesOpenClawBridgeMock(...args),
+  detachHermesOpenClawBridge: (...args: unknown[]) => detachHermesOpenClawBridgeMock(...args),
   recheckHermesOpenClawBridge: (...args: unknown[]) => recheckHermesOpenClawBridgeMock(...args),
 }));
 
@@ -222,6 +224,7 @@ describe('Settings runtime panel', () => {
     });
 
     attachHermesOpenClawBridgeMock.mockResolvedValue(undefined);
+    detachHermesOpenClawBridgeMock.mockResolvedValue(undefined);
     recheckHermesOpenClawBridgeMock.mockResolvedValue(undefined);
     const stoppedOpenClawSnapshot = {
       runtime: {
@@ -503,7 +506,7 @@ describe('Settings runtime panel', () => {
     expect(screen.getByTestId('settings-runtime-entry-openclaw')).toHaveTextContent('gateway.runtimeLabels.openclaw');
     expect(screen.getByTestId('settings-runtime-entry-openclaw')).toHaveTextContent('common:running');
     expect(screen.getByTestId('settings-runtime-entry-openclaw')).toHaveTextContent('gateway.runtimeHealthStates.healthy');
-    expect(screen.getByTestId('settings-runtime-entry-openclaw')).toHaveTextContent('1.2.3');
+    expect(within(screen.getByTestId('settings-runtime-entry-openclaw')).queryByText('1.2.3')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-runtime-entry-openclaw')).toHaveTextContent('http://127.0.0.1:18789');
     expect(screen.getByTestId('settings-runtime-openclaw-start-button')).toBeDisabled();
     expect(screen.getByTestId('settings-runtime-openclaw-stop-button')).toBeEnabled();
@@ -523,6 +526,28 @@ describe('Settings runtime panel', () => {
     expect(screen.getByTestId('settings-hermesclaw-version')).toHaveTextContent('0.9.0');
     expect(screen.getByTestId('settings-hermesclaw-shared-config-count')).toHaveTextContent('4 entries');
     expect(screen.getByTestId('settings-hermesclaw-install-status')).toHaveTextContent('Installed');
+  });
+
+  it('labels HermesAgent with its version in overview', async () => {
+    render(<Settings />);
+
+    await waitFor(() => {
+      expect(getRuntimeStatusMock).toHaveBeenCalled();
+    });
+
+    expect(screen.getByText('HermesAgent')).toBeInTheDocument();
+    expect(screen.getByText('0.9.0')).toBeInTheDocument();
+  });
+
+  it('opens FAQ from About to GitHub issues', async () => {
+    render(<Settings />);
+    fireEvent.click(screen.getByText('About'));
+
+    fireEvent.click(screen.getByText('about.faq'));
+
+    expect(window.electron.openExternal).toHaveBeenCalledWith(
+      'https://github.com/NextAgentX/HermesClaw/issues',
+    );
   });
 
   it('refreshes runtime status when the refresh button is clicked', async () => {
@@ -669,6 +694,61 @@ describe('Settings runtime panel', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('gateway.bridgeRecheckSucceeded');
   });
 
+  it('disconnects the bridge and refreshes runtime status from the settings panel', async () => {
+    let runtimeStatusCallCount = 0;
+
+    getRuntimeStatusMock.mockImplementation(() => {
+      runtimeStatusCallCount += 1;
+      return Promise.resolve({
+        runtime: {
+          installChoice: 'both',
+          mode: 'openclaw-with-hermes-agent',
+          installedKinds: ['openclaw', 'hermes'],
+          lastStandaloneRuntime: 'openclaw',
+        },
+        bridge: runtimeStatusCallCount > 1 ? {
+          enabled: true,
+          attached: false,
+          hermesInstalled: true,
+          hermesHealthy: true,
+          openclawRecognized: false,
+          error: undefined,
+        } : {
+          enabled: true,
+          attached: true,
+          hermesInstalled: true,
+          hermesHealthy: true,
+          openclawRecognized: true,
+          error: undefined,
+        },
+        runtimes: [],
+      });
+    });
+
+    detachHermesOpenClawBridgeMock.mockResolvedValue(undefined);
+
+    render(<Settings />);
+    fireEvent.click(screen.getByText('Runtime'));
+
+    await waitFor(() => {
+      expect(getRuntimeStatusMock).toHaveBeenCalled();
+    });
+
+    expect(screen.getByTestId('settings-runtime-bridge-detach-button')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('settings-runtime-bridge-detach-button'));
+
+    await waitFor(() => {
+      expect(detachHermesOpenClawBridgeMock).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(getRuntimeStatusMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(screen.getByTestId('settings-runtime-bridge-badge')).toHaveTextContent('gateway.bridgeStates.detached');
+    expect(toastSuccessMock).toHaveBeenCalledWith('Bridge disconnected');
+  });
+
   it('persists Windows Hermes runtime configuration from the settings panel', async () => {
     render(<Settings />);
     fireEvent.click(screen.getByText('Runtime'));
@@ -768,6 +848,9 @@ describe('Settings runtime panel', () => {
     });
 
     fireEvent.click(screen.getByText('Updates'));
+
+    expect(screen.getByText(/Version 0\.9\.0/)).toBeInTheDocument();
+    expect(screen.getByTestId('settings-hermesclaw-update-apply-button')).toBeEnabled();
 
     fireEvent.click(screen.getByTestId('settings-hermesclaw-update-check-button'));
     await waitFor(() => {
