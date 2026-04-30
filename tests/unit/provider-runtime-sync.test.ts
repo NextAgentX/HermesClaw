@@ -258,6 +258,67 @@ describe('provider-runtime-sync refresh strategy', () => {
     );
   });
 
+  it('syncs Bedrock runtime config without writing fake API key env or secret', async () => {
+    const bedrockProvider = createProvider({
+      id: 'bedrock',
+      type: 'bedrock',
+      name: 'AWS Bedrock',
+      model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+    });
+
+    mocks.getProviderConfig.mockReturnValue({
+      api: 'bedrock-converse-stream',
+      baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+    });
+    mocks.getProviderSecret.mockResolvedValue(undefined);
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(bedrockProvider, undefined, gateway as GatewayManager);
+
+    expect(mocks.saveProviderKeyToOpenClaw).not.toHaveBeenCalled();
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'bedrock',
+      'anthropic.claude-sonnet-4-5-20250929-v1:0',
+      expect.objectContaining({
+        baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+        api: 'bedrock-converse-stream',
+        apiKeyEnv: undefined,
+      }),
+    );
+    expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('syncs Azure OpenAI responses runtime config with API-key auth', async () => {
+    const azureProvider = createProvider({
+      id: 'azure-openai',
+      type: 'azure-openai',
+      name: 'Azure OpenAI',
+      model: 'gpt-4.1',
+      baseUrl: 'https://example-resource.openai.azure.com/openai/v1',
+    });
+
+    mocks.getProviderConfig.mockReturnValue({
+      api: 'azure-openai-responses',
+      baseUrl: 'https://YOUR-RESOURCE.openai.azure.com/openai/v1',
+      apiKeyEnv: 'AZURE_OPENAI_API_KEY',
+    });
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(azureProvider, 'azure-key', gateway as GatewayManager);
+
+    expect(mocks.saveProviderKeyToOpenClaw).toHaveBeenCalledWith('azure-openai', 'azure-key');
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'azure-openai',
+      'gpt-4.1',
+      expect.objectContaining({
+        baseUrl: 'https://example-resource.openai.azure.com/openai/v1',
+        api: 'azure-openai-responses',
+        apiKeyEnv: 'AZURE_OPENAI_API_KEY',
+      }),
+    );
+    expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
   it('syncs Ollama provider config to runtime without adding model prefix', async () => {
     const ollamaProvider = createProvider({
       id: 'ollamafd',

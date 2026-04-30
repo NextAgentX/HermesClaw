@@ -84,7 +84,7 @@ export function Setup() {
   const [installedSkills, setInstalledSkills] = useState<string[]>([]);
   // Runtime check status
   const [runtimeChecksPassed, setRuntimeChecksPassed] = useState(false);
-  const [installChoice, setInstallChoice] = useState<SetupInstallChoice>('openclaw');
+  const [installChoice, setInstallChoice] = useState<SetupInstallChoice>('both');
 
   const steps = getSteps(t);
   const safeStepIndex = Number.isInteger(currentStep)
@@ -592,16 +592,6 @@ function RuntimeContent({ installChoice, onInstallChoiceChange, onStatusChange }
     description: string;
   }> = [
     {
-      value: 'openclaw',
-      title: t('runtime.installChoice.openclaw.title'),
-      description: t('runtime.installChoice.openclaw.description'),
-    },
-    {
-      value: 'hermes',
-      title: t('runtime.installChoice.hermes.title'),
-      description: t('runtime.installChoice.hermes.description'),
-    },
-    {
       value: 'both',
       title: t('runtime.installChoice.both.title'),
       description: t('runtime.installChoice.both.description'),
@@ -710,7 +700,7 @@ function RuntimeContent({ installChoice, onInstallChoiceChange, onStatusChange }
           <p className="text-sm font-medium text-foreground">{t('runtime.installChoiceLabel')}</p>
           <p className="text-sm text-muted-foreground mt-1">{t('runtime.installChoiceHint')}</p>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3">
           {installChoiceOptions.map((option) => {
             const selected = installChoice === option.value;
             const disabled = windowsRequiresWsl && !windowsHermesReady && option.value !== 'openclaw';
