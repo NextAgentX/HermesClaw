@@ -9,8 +9,11 @@
 export const PROVIDER_TYPES = [
   'anthropic',
   'openai',
+  'azure-openai',
   'google',
+  'bedrock',
   'openrouter',
+  'copilot',
   'ark',
   'moonshot',
   'moonshot-global',
@@ -26,8 +29,11 @@ export type ProviderType = (typeof PROVIDER_TYPES)[number];
 export const BUILTIN_PROVIDER_TYPES = [
   'anthropic',
   'openai',
+  'azure-openai',
   'google',
+  'bedrock',
   'openrouter',
+  'copilot',
   'ark',
   'moonshot',
   'moonshot-global',
@@ -45,7 +51,15 @@ export interface ProviderConfig {
   name: string;
   type: ProviderType;
   baseUrl?: string;
-  apiProtocol?: 'openai-completions' | 'openai-responses' | 'anthropic-messages';
+  apiProtocol?:
+    | 'openai-completions'
+    | 'openai-responses'
+    | 'openai-codex-responses'
+    | 'azure-openai-responses'
+    | 'google-generative-ai'
+    | 'github-copilot'
+    | 'anthropic-messages'
+    | 'bedrock-converse-stream';
   headers?: Record<string, string>;
   model?: string;
   fallbackModels?: string[];
@@ -111,7 +125,15 @@ export interface ProviderAccount {
   label: string;
   authMode: ProviderAuthMode;
   baseUrl?: string;
-  apiProtocol?: 'openai-completions' | 'openai-responses' | 'anthropic-messages';
+  apiProtocol?:
+    | 'openai-completions'
+    | 'openai-responses'
+    | 'openai-codex-responses'
+    | 'azure-openai-responses'
+    | 'google-generative-ai'
+    | 'github-copilot'
+    | 'anthropic-messages'
+    | 'bedrock-converse-stream';
   headers?: Record<string, string>;
   model?: string;
   fallbackModels?: string[];
@@ -156,6 +178,7 @@ export const PROVIDER_TYPE_INFO: ProviderTypeInfo[] = [
     modelIdPlaceholder: 'gpt-5.4',
     apiKeyUrl: 'https://platform.openai.com/api-keys',
   },
+  { id: 'azure-openai', name: 'Azure OpenAI', icon: '🔷', placeholder: 'Azure OpenAI API key', model: 'Azure OpenAI', requiresApiKey: true, defaultBaseUrl: 'https://YOUR-RESOURCE.openai.azure.com/openai/v1', showBaseUrl: true, showModelId: true, modelIdPlaceholder: 'gpt-4.1', defaultModelId: 'gpt-4.1', apiKeyUrl: 'https://portal.azure.com/', docsUrl: 'https://learn.microsoft.com/azure/ai-services/openai/' },
   {
     id: 'google',
     name: 'Google',
@@ -171,7 +194,9 @@ export const PROVIDER_TYPE_INFO: ProviderTypeInfo[] = [
     modelIdPlaceholder: 'gemini-3-pro-preview',
     apiKeyUrl: 'https://aistudio.google.com/app/apikey',
   },
-  { id: 'openrouter', name: 'OpenRouter', icon: '🌐', placeholder: 'sk-or-v1-...', model: 'Multi-Model', requiresApiKey: true, showModelId: true, modelIdPlaceholder: 'openai/gpt-5.4', defaultModelId: 'openai/gpt-5.4', docsUrl: 'https://openrouter.ai/models' },
+  { id: 'bedrock', name: 'AWS Bedrock', icon: '🟧', placeholder: 'Uses AWS credentials', model: 'Bedrock', requiresApiKey: false, supportsApiKey: false, defaultBaseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com', showBaseUrl: true, showModelId: true, modelIdPlaceholder: 'anthropic.claude-sonnet-4-5-20250929-v1:0', defaultModelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0', docsUrl: 'https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html' },
+  { id: 'openrouter', name: 'OpenRouter', icon: '🌐', placeholder: 'sk-or-v1-...', model: 'Multi-Model', requiresApiKey: true, showModelId: true, modelIdPlaceholder: 'anthropic/claude-opus-4.6', defaultModelId: 'anthropic/claude-opus-4.6', docsUrl: 'https://openrouter.ai/models' },
+  { id: 'copilot', name: 'GitHub Copilot', icon: '🐙', placeholder: 'ghp_... or github_pat_...', model: 'Copilot', requiresApiKey: true, defaultBaseUrl: 'https://api.githubcopilot.com', showModelId: true, showModelIdInDevModeOnly: true, modelIdPlaceholder: 'gpt-4o', defaultModelId: 'gpt-4o', apiKeyUrl: 'https://github.com/settings/tokens', docsUrl: 'https://docs.github.com/en/copilot' },
   { id: 'minimax-portal-cn', name: 'MiniMax (CN)', icon: '☁️', placeholder: 'sk-...', model: 'MiniMax', requiresApiKey: false, isOAuth: true, supportsApiKey: true, defaultModelId: 'MiniMax-M2.7', showModelId: true, showModelIdInDevModeOnly: true, modelIdPlaceholder: 'MiniMax-M2.7', apiKeyUrl: 'https://platform.minimaxi.com/' },
   { id: 'moonshot', name: 'Moonshot (CN)', icon: '🌙', placeholder: 'sk-...', model: 'Kimi', requiresApiKey: true, defaultBaseUrl: 'https://api.moonshot.cn/v1', defaultModelId: 'kimi-k2.5', docsUrl: 'https://platform.moonshot.cn/' },
   { id: 'moonshot-global', name: 'Moonshot (Global)', icon: '🌙', placeholder: 'sk-...', model: 'Kimi', requiresApiKey: true, defaultBaseUrl: 'https://api.moonshot.ai/v1', defaultModelId: 'kimi-k2.5', docsUrl: 'https://platform.moonshot.ai/' },
@@ -258,6 +283,9 @@ export function resolveProviderApiKeyForSave(type: ProviderType | string, apiKey
   const trimmed = normalizeProviderApiKeyInput(apiKey);
   if (type === 'ollama') {
     return trimmed || OLLAMA_PLACEHOLDER_API_KEY;
+  }
+  if (type === 'bedrock') {
+    return undefined;
   }
   return trimmed || undefined;
 }

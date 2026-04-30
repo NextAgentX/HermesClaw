@@ -1,10 +1,14 @@
 export const PROVIDER_TYPES = [
   'anthropic',
   'openai',
+  'azure-openai',
   'google',
+  'bedrock',
   'openrouter',
+  'copilot',
   'ark',
   'moonshot',
+  'moonshot-global',
   'siliconflow',
   'minimax-portal',
   'minimax-portal-cn',
@@ -16,10 +20,14 @@ export const PROVIDER_TYPES = [
 export const BUILTIN_PROVIDER_TYPES = [
   'anthropic',
   'openai',
+  'azure-openai',
   'google',
+  'bedrock',
   'openrouter',
+  'copilot',
   'ark',
   'moonshot',
+  'moonshot-global',
   'siliconflow',
   'minimax-portal',
   'minimax-portal-cn',
@@ -35,7 +43,12 @@ export const OLLAMA_PLACEHOLDER_API_KEY = 'ollama-local';
 export type ProviderProtocol =
   | 'openai-completions'
   | 'openai-responses'
-  | 'anthropic-messages';
+  | 'openai-codex-responses'
+  | 'azure-openai-responses'
+  | 'google-generative-ai'
+  | 'github-copilot'
+  | 'anthropic-messages'
+  | 'bedrock-converse-stream';
 
 export type ProviderAuthMode =
   | 'api_key'
@@ -98,7 +111,7 @@ export interface ProviderModelEntry extends Record<string, unknown> {
 export interface ProviderBackendConfig {
   baseUrl: string;
   api: ProviderProtocol;
-  apiKeyEnv: string;
+  apiKeyEnv?: string;
   models?: ProviderModelEntry[];
   headers?: Record<string, string>;
 }

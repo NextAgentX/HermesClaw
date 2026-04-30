@@ -4,6 +4,7 @@ import { getProviderConfig } from '../../utils/provider-registry';
 type ValidationProfile =
   | 'openai-completions'
   | 'openai-responses'
+  | 'copilot'
   | 'google-query-key'
   | 'anthropic-header'
   | 'openrouter'
@@ -93,6 +94,10 @@ function getValidationProfile(
   providerType: string,
   options?: { apiProtocol?: string }
 ): ValidationProfile {
+  if (providerType === 'copilot') {
+    return 'copilot';
+  }
+
   const providerApi = options?.apiProtocol || getProviderConfig(providerType)?.api;
   if (providerApi === 'anthropic-messages') {
     return 'anthropic-header';
@@ -350,6 +355,81 @@ async function validateOpenRouterKey(
   return await performProviderValidationRequest(providerType, url, headers);
 }
 
+type CopilotTokenExchangeResult = ValidationResult & { token?: string };
+
+function getCopilotExchangeError(data: unknown, status: number): string {
+  const obj = data as {
+    error?: string | { message?: string };
+    message?: string;
+    documentation_url?: string;
+  } | null;
+  const errorMessage = typeof obj?.error === 'string' ? obj.error : obj?.error?.message;
+  return errorMessage || obj?.message || `GitHub Copilot token exchange failed: ${status}`;
+}
+
+async function exchangeGitHubTokenForCopilotToken(
+  githubToken: string,
+): Promise<CopilotTokenExchangeResult> {
+  const url = 'https://api.github.com/copilot_internal/v2/token';
+  const headers = {
+    Authorization: `Token ${githubToken}`,
+    'User-Agent': 'HermesClaw/1.0',
+    Accept: 'application/json',
+  };
+
+  try {
+    logValidationRequest('copilot', 'POST', url, headers);
+    const response = await proxyAwareFetch(url, { method: 'POST', headers });
+    logValidationStatus('copilot', response.status);
+    const data = await response.json().catch(() => ({}));
+    const token = (data as { token?: unknown }).token;
+
+    if (response.status >= 200 && response.status < 300 && typeof token === 'string' && token) {
+      return { valid: true, token };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return { valid: false, error: 'Invalid GitHub token', status: response.status };
+    }
+
+    return {
+      valid: false,
+      error: getCopilotExchangeError(data, response.status),
+      status: response.status,
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Connection error: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+async function validateCopilotGithubToken(apiKey: string): Promise<ValidationResult> {
+  const exchangeResult = await exchangeGitHubTokenForCopilotToken(apiKey);
+  if (!exchangeResult.valid || !exchangeResult.token) {
+    return { valid: false, error: exchangeResult.error || 'Unable to authorize GitHub Copilot' };
+  }
+
+  const modelsResult = await performProviderValidationRequest(
+    'copilot',
+    'https://api.githubcopilot.com/models?limit=1',
+    { Authorization: `Bearer ${exchangeResult.token}` },
+  );
+
+  if (modelsResult.valid || modelsResult.status === 429) {
+    return { valid: true };
+  }
+
+  if (modelsResult.authFailure) {
+    return { valid: false, error: modelsResult.error || 'Invalid GitHub Copilot token' };
+  }
+
+  // A successful GitHub token exchange is the authoritative authorization check;
+  // Copilot API shape can vary by account rollout, so non-auth probe failures are accepted.
+  return { valid: true };
+}
+
 export async function validateApiKeyWithProvider(
   providerType: string,
   apiKey: string,
@@ -383,6 +463,8 @@ export async function validateApiKeyWithProvider(
           'openai-responses',
           resolvedBaseUrl,
         );
+      case 'copilot':
+        return await validateCopilotGithubToken(trimmedKey);
       case 'google-query-key':
         return await validateGoogleQueryKey(providerType, trimmedKey, resolvedBaseUrl);
       case 'anthropic-header':
