@@ -26,6 +26,9 @@ extraResources:
   # because electron-builder respects .gitignore which excludes node_modules/)
   - from: build/openclaw/
     to: openclaw/
+  # HermesAgent Python runtime bundle (created by bundle-hermes-agent.mjs)
+  - from: build/hermes-agent/
+    to: hermes-agent/
   # Pre-bundled third-party skills (full directories, not only SKILL.md)
   - from: build/preinstalled-skills/
     to: resources/preinstalled-skills/
