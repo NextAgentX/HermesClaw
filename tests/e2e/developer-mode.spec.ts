@@ -6,6 +6,7 @@ test.describe('HermesClaw developer-mode gated UI', () => {
 
     await page.getByTestId('sidebar-nav-settings').click();
     await expect(page.getByTestId('settings-page')).toBeVisible();
+    await page.getByTestId('settings-tab-advanced').click();
     await expect(page.getByTestId('settings-developer-section')).toHaveCount(0);
     await expect(page.getByTestId('settings-dev-mode-switch')).toHaveAttribute('data-state', 'unchecked');
 
@@ -18,6 +19,7 @@ test.describe('HermesClaw developer-mode gated UI', () => {
     await expect(page.getByTestId('add-provider-dialog')).toHaveCount(0);
 
     await page.getByTestId('sidebar-nav-settings').click();
+    await page.getByTestId('settings-tab-advanced').click();
     await page.getByTestId('settings-dev-mode-switch').click();
     await expect(page.getByTestId('settings-dev-mode-switch')).toHaveAttribute('data-state', 'checked');
     await expect(page.getByTestId('settings-developer-section')).toBeVisible();

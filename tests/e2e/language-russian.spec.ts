@@ -77,6 +77,7 @@ test.describe('Russian language localization', () => {
       // Navigate to Settings (in English by default after skipSetup)
       await page.getByTestId('sidebar-nav-settings').click();
       await expect(page.getByTestId('settings-page')).toBeVisible();
+      await page.getByTestId('settings-tab-appearance').click();
       
       // Click Russian language button
       const russianButton = page.locator('button', { hasText: 'Русский' });

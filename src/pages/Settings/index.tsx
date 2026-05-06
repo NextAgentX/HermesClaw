@@ -929,6 +929,7 @@ export function Settings() {
           {settingsTabs.map((tab) => (
             <button
               key={tab.id}
+              data-testid={`settings-tab-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
                 "text-left px-4 py-2 rounded-lg text-[15px] transition-colors",

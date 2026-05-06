@@ -22,6 +22,7 @@ test.describe('HermesClaw developer proxy settings', () => {
 
     await page.getByTestId('sidebar-nav-settings').click();
     await expect(page.getByTestId('settings-page')).toBeVisible();
+    await page.getByTestId('settings-tab-advanced').click();
 
     const devModeToggle = page.getByTestId('settings-dev-mode-switch');
     await expect(devModeToggle).toBeVisible();
