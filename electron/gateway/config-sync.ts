@@ -36,6 +36,7 @@ import { logger } from '../utils/logger';
 import { prependPathEntry } from '../utils/env-path';
 import { copyPluginFromNodeModules, fixupPluginManifest, cpSyncSafe } from '../utils/plugin-install';
 import { stripSystemdSupervisorEnv } from './config-sync-env';
+import { repairPiAiOauthExportForGateway } from './pi-ai-oauth-export-repair';
 
 
 export interface GatewayLaunchContext {
@@ -475,6 +476,8 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
 
   const appSettings = await getAllSettings();
   await syncGatewayConfigBeforeLaunch(appSettings);
+
+  repairPiAiOauthExportForGateway(openclawDir);
 
   if (!existsSync(entryScript)) {
     throw new Error(`OpenClaw entry script not found at: ${entryScript}`);

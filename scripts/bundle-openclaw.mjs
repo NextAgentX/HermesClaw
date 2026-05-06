@@ -550,7 +550,40 @@ function patchBrokenModules(nodeModulesDir) {
     // Note: @mariozechner/pi-coding-agent is no longer a dep of openclaw 3.31.
   ];
 
+  function patchPiAiOauthExport() {
+    const pkgPath = path.join(nodeModulesDir, '@mariozechner', 'pi-ai', 'package.json');
+    if (!fs.existsSync(normWin(pkgPath))) return 0;
+
+    try {
+      const pkg = JSON.parse(fs.readFileSync(normWin(pkgPath), 'utf8'));
+      const oauthExport = pkg?.exports?.['./oauth'];
+      const importTarget = oauthExport?.import;
+      if (!oauthExport || typeof importTarget !== 'string') return 0;
+
+      const oauthFile = path.join(path.dirname(pkgPath), importTarget);
+      if (!fs.existsSync(normWin(oauthFile))) {
+        echo`   ⚠️  Skipped @mariozechner/pi-ai ./oauth export patch: missing ${oauthFile}`;
+        return 0;
+      }
+
+      if (oauthExport.require === importTarget && oauthExport.default === importTarget) return 0;
+
+      pkg.exports['./oauth'] = {
+        ...oauthExport,
+        require: importTarget,
+        default: importTarget,
+      };
+      fs.writeFileSync(normWin(pkgPath), JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+      echo`   🩹 Patched @mariozechner/pi-ai ./oauth export for CommonJS runtime access`;
+      return 1;
+    } catch (err) {
+      echo`   ⚠️  Failed to patch @mariozechner/pi-ai ./oauth export: ${err.message}`;
+      return 0;
+    }
+  }
+
   let count = 0;
+  count += patchPiAiOauthExport();
   for (const [rel, content] of Object.entries(rewritePatches)) {
     const target = path.join(nodeModulesDir, rel);
     if (fs.existsSync(target)) {
