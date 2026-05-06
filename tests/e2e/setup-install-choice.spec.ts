@@ -170,7 +170,7 @@ async function readInstallChoices(app: ElectronApplication): Promise<string[]> {
 async function openRuntimeStep(page: Page): Promise<void> {
   await expect(page.getByTestId('setup-page')).toBeVisible();
   await page.getByTestId('setup-next-button').click();
-  await expect(page.getByTestId('setup-install-choice-openclaw')).toBeVisible();
+  await expect(page.getByTestId('setup-install-choice-both')).toBeVisible();
 }
 
 async function reloadIntoMockedSetup(page: Page): Promise<void> {
@@ -191,7 +191,7 @@ async function waitForRuntimeReady(page: Page): Promise<void> {
 }
 
 test.describe('Setup install choice flow', () => {
-  test('uses openclaw as the default install choice', async ({ electronApp, page }) => {
+  test('uses both runtimes as the default install choice', async ({ electronApp, page }) => {
     await installSetupMocks(electronApp, {
       gatewayStatus: { state: 'running', port: 18789 },
       openclawStatus: {
@@ -207,12 +207,14 @@ test.describe('Setup install choice flow', () => {
     await openRuntimeStep(page);
 
     const nextButton = page.getByTestId('setup-next-button');
-    await expect(page.getByTestId('setup-install-choice-openclaw')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('setup-install-choice-both')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('setup-install-choice-openclaw')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveCount(0);
     await waitForRuntimeReady(page);
 
     await nextButton.click();
 
-    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['openclaw']);
+    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['both']);
   });
 
   test('passes the both choice into install orchestration', async ({ electronApp, page }) => {
@@ -243,7 +245,7 @@ test.describe('Setup install choice flow', () => {
     await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['both']);
   });
 
-  test('allows hermes-only selection when openclaw readiness is unavailable', async ({ electronApp, page }) => {
+  test('blocks install when bundled OpenClaw readiness is unavailable', async ({ electronApp, page }) => {
     await installSetupMocks(electronApp, {
       gatewayStatus: { state: 'stopped', port: 18789 },
       openclawStatus: {
@@ -259,18 +261,13 @@ test.describe('Setup install choice flow', () => {
 
     const nextButton = page.getByTestId('setup-next-button');
     await expect(nextButton).toBeDisabled();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toBeEnabled();
-
-    await page.getByTestId('setup-install-choice-hermes').click();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveAttribute('aria-pressed', 'true');
-    await expect(nextButton).toBeEnabled();
-
-    await nextButton.click();
-
-    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['hermes']);
+    await expect(page.getByTestId('setup-install-choice-both')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('setup-install-choice-openclaw')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveCount(0);
+    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual([]);
   });
 
-  test('blocks hermes and both on Windows when neither native Hermes nor WSL is configured', async ({ electronApp, page }) => {
+  test('blocks both runtime install on Windows when neither native Hermes nor WSL is configured', async ({ electronApp, page }) => {
     await installSetupMocks(electronApp, {
       gatewayStatus: { state: 'running', port: 18789 },
       openclawStatus: {
@@ -286,22 +283,21 @@ test.describe('Setup install choice flow', () => {
     await openRuntimeStep(page);
 
     await expect(page.getByTestId('setup-runtime-wsl2-notice')).toBeVisible();
-    await expect(page.getByTestId('setup-install-choice-openclaw')).toBeEnabled();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toBeDisabled();
     await expect(page.getByTestId('setup-install-choice-both')).toBeDisabled();
-
-    await page.getByTestId('setup-next-button').click();
-
-    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['openclaw']);
+    await expect(page.getByTestId('setup-install-choice-openclaw')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveCount(0);
+    await expect(page.getByTestId('setup-next-button')).toBeDisabled();
+    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual([]);
   });
 
-  test('allows hermes on Windows when a native Hermes path is configured without WSL', async ({ electronApp, page }) => {
+  test('allows both runtime install on Windows when a native Hermes path is configured without WSL', async ({ electronApp, page }) => {
     await installSetupMocks(electronApp, {
-      gatewayStatus: { state: 'stopped', port: 18789 },
+      gatewayStatus: { state: 'running', port: 18789 },
       openclawStatus: {
-        packageExists: false,
-        isBuilt: false,
+        packageExists: true,
+        isBuilt: true,
         dir: '/tmp/openclaw',
+        version: '2026.4.15',
       },
       platform: 'win32',
       windowsHermesPreferredMode: 'native',
@@ -312,27 +308,26 @@ test.describe('Setup install choice flow', () => {
     await openRuntimeStep(page);
 
     const nextButton = page.getByTestId('setup-next-button');
-    await expect(nextButton).toBeDisabled();
     await expect(page.getByTestId('setup-runtime-wsl2-notice')).toBeVisible();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toBeEnabled();
     await expect(page.getByTestId('setup-install-choice-both')).toBeEnabled();
-
-    await page.getByTestId('setup-install-choice-hermes').click();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('setup-install-choice-openclaw')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-both')).toHaveAttribute('aria-pressed', 'true');
     await expect(nextButton).toBeEnabled();
 
     await nextButton.click();
 
-    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['hermes']);
+    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['both']);
   });
 
-  test('allows hermes on Windows when a WSL distro is configured', async ({ electronApp, page }) => {
+  test('allows both runtime install on Windows when a WSL distro is configured', async ({ electronApp, page }) => {
     await installSetupMocks(electronApp, {
-      gatewayStatus: { state: 'stopped', port: 18789 },
+      gatewayStatus: { state: 'running', port: 18789 },
       openclawStatus: {
-        packageExists: false,
-        isBuilt: false,
+        packageExists: true,
+        isBuilt: true,
         dir: '/tmp/openclaw',
+        version: '2026.4.15',
       },
       platform: 'win32',
       windowsHermesPreferredMode: 'wsl2',
@@ -343,16 +338,15 @@ test.describe('Setup install choice flow', () => {
     await openRuntimeStep(page);
 
     const nextButton = page.getByTestId('setup-next-button');
-    await expect(nextButton).toBeDisabled();
     await expect(page.getByTestId('setup-runtime-wsl2-notice')).toBeVisible();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toBeEnabled();
-
-    await page.getByTestId('setup-install-choice-hermes').click();
-    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('setup-install-choice-both')).toBeEnabled();
+    await expect(page.getByTestId('setup-install-choice-openclaw')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-hermes')).toHaveCount(0);
+    await expect(page.getByTestId('setup-install-choice-both')).toHaveAttribute('aria-pressed', 'true');
     await expect(nextButton).toBeEnabled();
 
     await nextButton.click();
 
-    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['hermes']);
+    await expect.poll(async () => await readInstallChoices(electronApp)).toEqual(['both']);
   });
 });
