@@ -551,6 +551,14 @@ function resolveOpenClawRuntimeEntryFromDescriptor(runtimeDir: string): string |
   return isAbsolute(entryArg) ? entryArg : join(runtimeDir, entryArg);
 }
 
+function resolveOpenClawRuntimeEntry(runtimeDir: string): string {
+  return resolveOpenClawRuntimeEntryFromDescriptor(runtimeDir) ?? join(runtimeDir, 'openclaw.mjs');
+}
+
+function isLaunchableOpenClawRuntimeDir(runtimeDir: string): boolean {
+  return existsSync(resolveOpenClawRuntimeEntry(runtimeDir));
+}
+
 /**
  * Get preload script path
  */
@@ -588,7 +596,11 @@ export function getOpenClawResolvedDir(): string {
  * switched to a downloaded runtime; otherwise fall back to the bundled package.
  */
 export function getOpenClawRuntimeDir(): string {
-  return readActiveOpenClawRuntimeRecord()?.runtimeDir ?? getBundledOpenClawDir();
+  const activeRuntimeDir = readActiveOpenClawRuntimeRecord()?.runtimeDir;
+  if (activeRuntimeDir && isLaunchableOpenClawRuntimeDir(activeRuntimeDir)) {
+    return activeRuntimeDir;
+  }
+  return getBundledOpenClawDir();
 }
 
 /**
@@ -619,7 +631,7 @@ export function getOpenClawEntryPath(): string {
  */
 export function getOpenClawRuntimeEntryPath(): string {
   const runtimeDir = getOpenClawRuntimeDir();
-  return resolveOpenClawRuntimeEntryFromDescriptor(runtimeDir) ?? join(runtimeDir, 'openclaw.mjs');
+  return resolveOpenClawRuntimeEntry(runtimeDir);
 }
 
 /**
@@ -650,8 +662,7 @@ export function isOpenClawRuntimePresent(): boolean {
   const dir = getOpenClawRuntimeDir();
   const runtimeEntryPath = getOpenClawRuntimeEntryPath();
   const pkgJsonPath = join(dir, 'package.json');
-  const descriptorPath = join(dir, 'runtime.json');
-  return existsSync(dir) && (existsSync(runtimeEntryPath) || existsSync(pkgJsonPath) || existsSync(descriptorPath));
+  return existsSync(dir) && (existsSync(runtimeEntryPath) || existsSync(pkgJsonPath));
 }
 
 /**
@@ -713,7 +724,8 @@ export function getOpenClawRuntimeStatus(): OpenClawStatus {
   const entryPath = getOpenClawRuntimeEntryPath();
   const activeRuntime = readActiveOpenClawRuntimeRecord();
   const descriptor = readOpenClawRuntimeDescriptor(dir);
-  let version = activeRuntime?.version ?? descriptor?.version;
+  const usingActiveRuntime = activeRuntime?.runtimeDir === dir;
+  let version = (usingActiveRuntime ? activeRuntime?.version : undefined) ?? descriptor?.version;
 
   if (!version) {
     try {
