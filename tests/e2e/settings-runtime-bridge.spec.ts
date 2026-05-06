@@ -428,14 +428,18 @@ async function installRuntimeBridgeMocks(app: ElectronApplication): Promise<void
 }
 
 test.describe('Settings runtime bridge actions', () => {
+  async function openRuntimeSettings(page: Page): Promise<void> {
+    await page.getByTestId('sidebar-nav-settings').click();
+    await expect(page.getByTestId('settings-page')).toBeVisible();
+    await page.getByTestId('settings-tab-runtime').click();
+    await expect(page.getByTestId('settings-runtime-panel')).toBeVisible();
+  }
+
   test('surfaces degraded both-mode bridge startup while OpenClaw remains available', async ({ electronApp, page }) => {
     await installRuntimeBridgeMocks(electronApp);
     await completeSetup(page);
 
-    await page.getByTestId('sidebar-nav-settings').click();
-    await expect(page.getByTestId('settings-page')).toBeVisible();
-    await expect(page.getByTestId('settings-runtime-panel')).toBeVisible();
-    await expect(page.getByTestId('settings-hermesclaw-panel')).toBeVisible();
+    await openRuntimeSettings(page);
 
     await expect(page.getByTestId('settings-runtime-mode-value')).toContainText(/OpenClaw/i);
     await expect(page.getByTestId('settings-installed-runtime-openclaw')).toContainText('OpenClaw');
@@ -444,19 +448,10 @@ test.describe('Settings runtime bridge actions', () => {
     const openclawEntry = page.getByTestId('settings-runtime-entry-openclaw');
     await expect(openclawEntry).toContainText('OpenClaw');
     await expect(openclawEntry).toContainText(/running/i);
-    await expect(openclawEntry).toContainText('1.2.3');
     await expect(openclawEntry).toContainText('http://127.0.0.1:18789');
     await expect(page.getByTestId('settings-runtime-openclaw-start-button')).toBeDisabled();
     await expect(page.getByTestId('settings-runtime-openclaw-stop-button')).toBeEnabled();
     await expect(page.getByTestId('settings-runtime-openclaw-restart-button')).toBeEnabled();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-check-button')).toBeEnabled();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-apply-button')).toBeEnabled();
-    await expect(page.getByTestId('settings-runtime-openclaw-rollback-button')).toBeEnabled();
-
-    await page.getByTestId('settings-runtime-openclaw-update-check-button').click();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('stable: 1.3.0 update available');
-    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('Gateway runtime refresh');
-
     const bridgeBadge = page.getByTestId('settings-runtime-bridge-badge');
     const bridgeError = page.getByTestId('settings-runtime-bridge-error');
     await expect(bridgeBadge).not.toHaveText('');
@@ -466,19 +461,32 @@ test.describe('Settings runtime bridge actions', () => {
     await expect(page.getByTestId('settings-runtime-hermes-start-button')).toBeEnabled();
     await expect(page.getByTestId('settings-runtime-hermes-stop-button')).toBeDisabled();
     await expect(page.getByTestId('settings-runtime-hermes-restart-button')).toBeEnabled();
+
+    await page.getByTestId('settings-tab-updates').click();
+    await expect(page.getByTestId('settings-runtime-openclaw-update-check-button')).toBeEnabled();
+    await expect(page.getByTestId('settings-runtime-openclaw-update-apply-button')).toBeEnabled();
+    await expect(page.getByTestId('settings-runtime-openclaw-rollback-button')).toBeEnabled();
+
+    await page.getByTestId('settings-runtime-openclaw-update-check-button').click();
+    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('stable: 1.3.0 update available');
+    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('Gateway runtime refresh');
+    await page.getByTestId('settings-runtime-openclaw-update-apply-button').click();
+    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('automatically rolled back OpenClaw to 1.2.3');
+
+    await page.getByTestId('settings-tab-integration').click();
     await expect(page.getByTestId('settings-hermesclaw-channel')).toContainText('stable');
     await expect(page.getByTestId('settings-hermesclaw-version')).toContainText('0.9.0');
     await expect(page.getByTestId('settings-hermesclaw-shared-config-count')).toContainText('4 entries');
-    await expect(page.getByTestId('settings-hermesclaw-repair-button')).toBeVisible();
     await expect(page.getByTestId('settings-hermesclaw-open-logs-button')).toBeVisible();
-    await page.getByTestId('settings-runtime-openclaw-update-apply-button').click();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('automatically rolled back OpenClaw to 1.2.3');
-    await page.getByTestId('settings-hermesclaw-repair-button').click();
-    await expect(page.getByTestId('settings-hermesclaw-doctor-result')).toContainText('Repair readiness: pass');
-    await expect(page.getByTestId('settings-hermesclaw-report-path')).toContainText('hermesclaw-doctor-2.json');
     await page.getByTestId('settings-hermesclaw-sync-button').click();
     await expect(page.getByTestId('settings-hermesclaw-sync-log')).toContainText('Dry-run completed');
     await page.getByTestId('settings-hermesclaw-open-logs-button').click();
+
+    await page.getByTestId('settings-tab-advanced').click();
+    await expect(page.getByTestId('settings-hermesclaw-repair-button')).toBeVisible();
+    await page.getByTestId('settings-hermesclaw-repair-button').click();
+    await expect(page.getByTestId('settings-hermesclaw-doctor-result')).toContainText('Repair readiness: pass');
+    await expect(page.getByTestId('settings-hermesclaw-report-path')).toContainText('hermesclaw-doctor-2.json');
 
     await page.getByTestId('sidebar-new-chat').click();
     await expect(page.getByTestId('main-layout')).toBeVisible();
@@ -488,9 +496,7 @@ test.describe('Settings runtime bridge actions', () => {
     await installRuntimeBridgeMocks(electronApp);
     await completeSetup(page);
 
-    await page.getByTestId('sidebar-nav-settings').click();
-    await expect(page.getByTestId('settings-page')).toBeVisible();
-    await expect(page.getByTestId('settings-runtime-panel')).toBeVisible();
+    await openRuntimeSettings(page);
     await expect(page.getByTestId('settings-runtime-entry-openclaw')).toContainText('OpenClaw');
     await expect(page.getByTestId('settings-runtime-entry-hermes')).toContainText('Hermes');
 
@@ -519,9 +525,7 @@ test.describe('Settings runtime bridge actions', () => {
     await installRuntimeBridgeMocks(electronApp);
     await completeSetup(page);
 
-    await page.getByTestId('sidebar-nav-settings').click();
-    await expect(page.getByTestId('settings-page')).toBeVisible();
-    await expect(page.getByTestId('settings-runtime-panel')).toBeVisible();
+    await openRuntimeSettings(page);
     await expect(page.getByTestId('settings-runtime-config-panel')).toBeVisible();
 
     await page.getByTestId('settings-runtime-mode-native').click();
