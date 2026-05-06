@@ -17,6 +17,7 @@
  */
 
 import 'zx/globals';
+import { patchOpenClawRuntimeRoot } from './patch-openclaw-runtime.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -822,6 +823,7 @@ function patchBundledRuntime(outputDir) {
 
 patchBrokenModules(outputNodeModules);
 patchBundledRuntime(OUTPUT);
+patchOpenClawRuntimeRoot(OUTPUT);
 
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));
