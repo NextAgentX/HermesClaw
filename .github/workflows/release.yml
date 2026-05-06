@@ -41,6 +41,7 @@ jobs:
   release:
     needs: validate-release
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -116,19 +117,29 @@ jobs:
           ulimit -n 65536
           echo "File descriptor limit: $(ulimit -n)"
 
-          if [ -z "${MAC_CERTS:-}" ]; then
-            echo "MAC_CERTS is not configured; building unsigned macOS artifacts."
-            export CSC_IDENTITY_AUTO_DISCOVERY=false
-            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
-          else
+          if [ -n "${MAC_CERTS:-}" ] && [ -n "${MAC_CERTS_PASSWORD:-}" ] && [ -n "${MAC_APPLE_ID:-}" ] && [ -n "${MAC_APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${MAC_APPLE_TEAM_ID:-}" ]; then
+            echo "macOS signing and notarization secrets are configured; building signed macOS artifacts."
             export CSC_LINK="$MAC_CERTS"
             export CSC_KEY_PASSWORD="$MAC_CERTS_PASSWORD"
             export APPLE_ID="$MAC_APPLE_ID"
             export APPLE_APP_SPECIFIC_PASSWORD="$MAC_APPLE_APP_SPECIFIC_PASSWORD"
             export APPLE_TEAM_ID="$MAC_APPLE_TEAM_ID"
-          fi
 
-          pnpm run package:mac
+            pnpm run package:mac
+          else
+            echo "macOS signing/notarization secrets are incomplete; building unsigned macOS artifacts."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+
+            pnpm run package
+            cat > electron-builder.unsigned.yml <<'EOF'
+          extends: ./electron-builder.yml
+          mac:
+            identity: null
+            notarize: false
+          EOF
+            pnpm exec electron-builder --mac --publish never --config electron-builder.unsigned.yml
+          fi
 
       # Windows specific steps
       - name: Build Windows
