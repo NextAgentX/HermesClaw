@@ -522,6 +522,8 @@ test.describe('Settings runtime bridge actions', () => {
   });
 
   test('persists Windows Hermes runtime configuration from settings', async ({ electronApp, page }) => {
+    test.skip(process.platform !== 'win32', 'Windows Hermes runtime configuration is only visible on Windows');
+
     await installRuntimeBridgeMocks(electronApp);
     await completeSetup(page);
 

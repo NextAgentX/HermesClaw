@@ -137,6 +137,9 @@ jobs:
           mac:
             identity: null
             notarize: false
+            hardenedRuntime: false
+            entitlements: null
+            entitlementsInherit: null
           EOF
             pnpm exec electron-builder --mac --publish never --config electron-builder.unsigned.yml
           fi
@@ -370,11 +373,11 @@ jobs:
             - **Installer (ARM64)**: `HermesClaw-*-win-arm64.exe`
             
             #### Linux
-            - **AppImage (x64)**: `HermesClaw-*-linux-x86_64.AppImage` (Universal format, recommended)
+            - **AppImage (x64)**: `HermesClaw-*-linux-x64.AppImage` (Universal format, recommended)
             - **AppImage (ARM64)**: `HermesClaw-*-linux-arm64.AppImage`
-            - **Debian/Ubuntu (x64)**: `HermesClaw-*-linux-amd64.deb`
+            - **Debian/Ubuntu (x64)**: `HermesClaw-*-linux-x64.deb`
             - **Debian/Ubuntu (ARM64)**: `HermesClaw-*-linux-arm64.deb`
-            - **RPM (x64)**: `HermesClaw-*-linux-x86_64.rpm`
+            - **RPM (x64)**: `HermesClaw-*-linux-x64.rpm`
             
             ### 📝 Release Notes
             
@@ -495,11 +498,11 @@ jobs:
                   arm64: ($base + "/HermesClaw-" + $version + "-win-arm64.exe")
                 },
                 linux: {
-                  deb_amd64: ($base + "/HermesClaw-" + $version + "-linux-amd64.deb"),
+                  deb_x64: ($base + "/HermesClaw-" + $version + "-linux-x64.deb"),
                   deb_arm64: ($base + "/HermesClaw-" + $version + "-linux-arm64.deb"),
-                  appimage_x64: ($base + "/HermesClaw-" + $version + "-linux-x86_64.AppImage"),
+                  appimage_x64: ($base + "/HermesClaw-" + $version + "-linux-x64.AppImage"),
                   appimage_arm64: ($base + "/HermesClaw-" + $version + "-linux-arm64.AppImage"),
-                  rpm_x64: ($base + "/HermesClaw-" + $version + "-linux-x86_64.rpm")
+                  rpm_x64: ($base + "/HermesClaw-" + $version + "-linux-x64.rpm")
                 }
               },
               changelog: $changelog
