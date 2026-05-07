@@ -5,22 +5,23 @@
 <h1 align="center">HermesClaw</h1>
 
 <p align="center">
-  <strong>面向 OpenClaw 与 Hermes 智能体的开源桌面工作台</strong>
+  <strong>An open-source desktop workspace for OpenClaw and Hermes agents</strong>
 </p>
 
 <p align="center">
-  <a href="#项目介绍">项目介绍</a> ·
-  <a href="#主要能力">主要能力</a> ·
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#致谢">致谢</a>
+  <a href="#overview">Overview</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#acknowledgements">Acknowledgements</a>
 </p>
 
 <p align="center">
-  中文 · <a href="README.en.md">English</a>
+  <a href="README_CN.md">中文</a> · English
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform" />
+  <img src="https://img.shields.io/badge/status-in%20development-yellow" alt="Status: in development" />
   <img src="https://img.shields.io/badge/electron-40+-47848F?logo=electron" alt="Electron" />
   <img src="https://img.shields.io/badge/react-19-61DAFB?logo=react" alt="React" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
@@ -28,40 +29,38 @@
 
 ---
 
-## 项目介绍
+## Overview
 
-这份 README 是 HermesClaw 作为 GitHub 开源库的项目介绍。HermesClaw 是一个开源的 AI 智能体桌面应用，目标是把 OpenClaw 与 Hermes 的运行、配置和日常使用整合到一个可视化工作台中。用户不需要长期依赖命令行，就可以完成模型供应商配置、智能体对话、技能管理、渠道接入、定时任务和运行时状态检查。
+This README introduces HermesClaw as an open-source GitHub project. HermesClaw is an open-source desktop application for AI agents. It brings the runtime, configuration, and daily use of OpenClaw and Hermes into a visual workspace. Users can configure model providers, chat with agents, manage skills, connect channels, schedule tasks, and inspect runtime status without relying on the command line for everyday work.
 
-这个项目适合希望在本地管理 AI 智能体工作流的用户与开发者：普通用户可以通过图形界面快速开始，开发者也可以直接阅读源码、调整运行时集成方式，并基于现有架构继续扩展。
+HermesClaw is designed for users and developers who want to manage local AI-agent workflows. General users can get started through the graphical interface, while developers can read the source code, adjust runtime integrations, and extend the existing architecture.
 
- OpenClaw 调用 Hermes 子进程的数据流示意：
+OpenClaw-to-Hermes subprocess data flow:
 
 ```mermaid
 graph LR
-  A[用户消息] --> OC(OpenClaw 主进程)
-  OC -->|解析消息| B{是否需要 Hermes}
-  B -- 是 --> CallHermes[调用 Hermes 子进程]
+  A[User message] --> OC(OpenClaw main process)
+  OC -->|Parse message| B{Need Hermes?}
+  B -- Yes --> CallHermes[Call Hermes subprocess]
   CallHermes -->|STDIN/HTTP| HermesCore[Hermes Core]
-  HermesCore -->|结果| CallHermes
-  CallHermes -->|返回| OC
-  B -- 否 --> OCAgent[OC Agent]
-  OCAgent -->|生成回复| OC
-  OC -->|发送| C[用户]
+  HermesCore -->|Result| CallHermes
+  CallHermes -->|Return| OC
+  B -- No --> OCAgent[OC Agent]
+  OCAgent -->|Generate reply| OC
+  OC -->|Send| C[User]
 ```
 
+## Features
 
+- **Graphical onboarding**: Configure language, model providers, and built-in skills through the first-run setup flow; the runtime defaults to the combined OpenClaw + Hermes mode.
+- **Agent chat workspace**: Use Markdown messages, conversation history, and `@agent` routing to switch between agent contexts.
+- **Runtime management**: Manage OpenClaw and Hermes through the primary `hermesclaw-both` mode, including Settings-based install, update checks, update application, rollback, and startup update prompts.
+- **Model provider configuration**: Manage API keys, OAuth, custom OpenAI-compatible endpoints, GitHub Copilot authorization, and compatibility settings.
+- **Skill and plugin management**: Browse, install, enable, and inspect OpenClaw skills and their on-disk directories.
+- **Channels and scheduled tasks**: Configure external channels, account bindings, agent bindings, and recurring jobs.
+- **Cross-platform desktop experience**: Built with Electron, React, and TypeScript for macOS, Windows, and Linux.
 
-## 主要能力
-
-- **图形化初始化**：通过首次启动向导配置语言、模型供应商和内置技能；运行时默认使用 OpenClaw + Hermes 一体模式。
-- **智能体聊天工作台**：支持 Markdown 消息、历史记录和 `@agent` 路由，方便在不同智能体上下文之间切换。
-- **运行时管理**：以 `hermesclaw-both` 为主模式管理 OpenClaw 与 Hermes，支持设置页安装、检查更新、应用更新、回滚和启动时更新提醒。
-- **模型供应商配置**：管理 API Key、OAuth、自定义 OpenAI 兼容端点、GitHub Copilot 授权和兼容性设置。
-- **技能与插件管理**：浏览、安装、启用和查看 OpenClaw 技能及其实际目录。
-- **渠道与定时任务**：配置外部渠道、账号绑定、智能体绑定和周期性任务。
-- **跨平台桌面体验**：基于 Electron、React 与 TypeScript，面向 macOS、Windows 和 Linux。
-
-## 截图
+## Screenshots
 
 <p align="center">
   <img src="resources/screenshot/en/chat.png" style="width: 100%; height: auto;" alt="HermesClaw chat" />
@@ -71,19 +70,19 @@ graph LR
   <img src="resources/screenshot/en/settings.png" style="width: 100%; height: auto;" alt="HermesClaw settings" />
 </p>
 
-## 快速开始
+## Quick Start
 
-### 运行环境
+### Runtime environment
 
-- **Node.js**：建议使用 Node.js 24，以保持与 CI 环境一致。
-- **Python**：HermesAgent 打包运行时使用 Python 3.11.10；`pnpm run init` 会下载 uv 运行时，构建或打包 HermesAgent 时会通过 uv 创建对应 Python 虚拟环境。
-- **包管理器**：使用 pnpm 10.31.0（项目已在 `packageManager` 中锁定版本）。
-- **操作系统**：支持 macOS、Windows 和 Linux；本地开发需准备对应平台的 Electron 运行环境。
-- **端口占用**：开发服务默认使用 `5173`，OpenClaw Gateway 默认使用 `18789`；如需调整，可参考 `.env.example`。
-- **OpenClaw 版本**：打包基线由 `package.json` 固定为 `openclaw@2026.4.27`；构建时可通过 `OPENCLAW_VERSION` 或 `OPENCLAW_PACKAGE_SPEC` 覆盖，第三方 OpenClaw 插件镜像由 `pnpm run bundle:openclaw-plugins` 打包。
-- **首次初始化**：首次运行前执行 `pnpm run init`，该命令会安装依赖并下载项目所需的 uv 运行时资源。
+- **Node.js**: Node.js 24 is recommended to match the CI environment.
+- **Python**: HermesAgent packaging uses Python 3.11.10; `pnpm run init` downloads the uv runtime, and HermesAgent builds/packages create the matching Python virtual environment through uv.
+- **Package manager**: Use pnpm 10.31.0, as locked by the project's `packageManager` field.
+- **Operating systems**: macOS, Windows, and Linux are supported; local development needs the Electron runtime environment for the target platform.
+- **Ports**: The development server uses `5173` by default, and OpenClaw Gateway uses `18789` by default. See `.env.example` if you need to change them.
+- **OpenClaw version**: The packaged baseline is pinned by `package.json` to `openclaw@2026.4.27`; builds can override it with `OPENCLAW_VERSION` or `OPENCLAW_PACKAGE_SPEC`, and third-party OpenClaw plugin mirrors are packaged by `pnpm run bundle:openclaw-plugins`.
+- **First-time initialization**: Run `pnpm run init` before first use. It installs dependencies and downloads the uv runtime resources required by the project.
 
-请先克隆本仓库，然后在项目目录中执行：
+Clone this repository, then run the following commands in the project directory:
 
 ```bash
 cd HermesClaw
@@ -91,9 +90,9 @@ pnpm run init
 pnpm dev
 ```
 
-## 开发
+## Development
 
-常用命令：
+Common commands:
 
 ```bash
 pnpm install
@@ -103,34 +102,34 @@ pnpm run typecheck
 pnpm run build:vite
 ```
 
-项目结构：
+Project structure:
 
 ```text
 HermesClaw/
-├── electron/        # Electron Main、运行时服务、网关管理
-├── src/             # React Renderer 应用
-├── resources/       # 运行时资源、CLI 包装脚本、截图与上下文文件
-├── scripts/         # 构建、打包、安装器和维护脚本
-├── shared/          # 共享常量与类型
-└── tests/           # 单元测试与端到端测试
+├── electron/        # Electron main process, runtime services, gateway management
+├── src/             # React renderer application
+├── resources/       # Runtime resources, CLI wrapper scripts, screenshots, and context files
+├── scripts/         # Build, packaging, installer, and maintenance scripts
+├── shared/          # Shared constants and types
+└── tests/           # Unit and end-to-end tests
 ```
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue、改进文档、补充翻译、修复问题或提出新功能建议。提交 Pull Request 前，请尽量保持改动聚焦，并说明这次改动对用户或开发者的影响。
+Issues, documentation improvements, translations, bug fixes, and feature suggestions are welcome. Before submitting a pull request, keep the change focused and explain how it affects users or developers.
 
-## 致谢
+## Acknowledgements
 
-备注：这个项目的完成需要感谢OpenClaw、HermesAgent和ClawX。
+HermesClaw was made possible with thanks to OpenClaw, HermesAgent, and ClawX.
 
-同时也感谢相关开源社区的长期积累：
+We also thank the broader open-source community:
 
-- **OpenClaw**：为本项目提供智能体运行时基础。
-- **HermesAgent**：为项目提供 Hermes 集成、智能体运行方式和桥接方向提供重要启发。
-- **ClawX**：为桌面端产品形态、交互经验和项目基础提供了重要参考。
+- **OpenClaw**: Provides the agent runtime foundation for HermesClaw.
+- **HermesAgent**: Inspired Hermes integration, agent runtime design, and bridge direction.
+- **ClawX**: Provided important references for the desktop product shape, interaction experience, and project foundation.
 
-也感谢所有提供想法、代码、测试和反馈的贡献者。
+Thanks to everyone who contributes ideas, code, tests, and feedback.
 
-## 许可证
+## License
 
-HermesClaw 基于 [MIT License](LICENSE) 开源。
+HermesClaw is open source under the [MIT License](LICENSE).
