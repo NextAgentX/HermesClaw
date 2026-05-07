@@ -61,7 +61,7 @@ publish:
     url: https://oss.intelli-spectrum.com/latest
     useMultipleRangeRequest: false
   - provider: github
-    owner: ValueCell-ai
+    owner: NextAgentX-ai
     repo: HermesClaw
 
 # macOS Configuration
@@ -164,7 +164,7 @@ linux:
       arch:
         - x64
   category: Utility
-  maintainer: HermesClaw Team <public@valuecell.ai>
+  maintainer: HermesClaw Team <public@nextagentx.ai>
   vendor: HermesClaw
   synopsis: AI Assistant powered by OpenClaw
   description: HermesClaw is a graphical AI assistant application that integrates with OpenClaw Gateway to provide intelligent automation and assistance across multiple messaging platforms.
