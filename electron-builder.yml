@@ -54,14 +54,10 @@ asarUnpack:
 npmRebuild: false
 
 # Auto-update configuration
-# Primary: Alibaba Cloud OSS (fast for Chinese users, used for auto-update)
-# Fallback: GitHub Releases (backup, used when OSS is unavailable)
+# GitHub Releases: https://github.com/NextAgentX/HermesClaw/releases
 publish:
-  - provider: generic
-    url: https://oss.intelli-spectrum.com/latest
-    useMultipleRangeRequest: false
   - provider: github
-    owner: NextAgentX-ai
+    owner: NextAgentX
     repo: HermesClaw
 
 # macOS Configuration

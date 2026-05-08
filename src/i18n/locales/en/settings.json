@@ -1,6 +1,15 @@
 {
   "title": "Settings",
   "subtitle": "Configure your HermesClaw experience",
+  "tabs": {
+    "overview": "Overview",
+    "appearance": "Appearance & Startup",
+    "runtime": "Runtime",
+    "updates": "Updates",
+    "integration": "HermesClaw Integration",
+    "advanced": "Advanced & Diagnostics",
+    "about": "About"
+  },
   "appearance": {
     "title": "General",
     "description": "Customize the look and feel",

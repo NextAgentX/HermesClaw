@@ -632,11 +632,7 @@ export function Settings() {
   }, [devModeUnlocked, showCliTools]);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void refreshRuntimeStatus();
-    }, 350);
-
-    return () => window.clearTimeout(timeoutId);
+    void refreshRuntimeStatus();
   }, [gatewayStatus.gatewayReady, gatewayStatus.state, refreshRuntimeStatus]);
 
   const handleCopyCliCommand = async () => {
@@ -938,7 +934,7 @@ export function Settings() {
                   : "text-foreground/70 hover:bg-black/5 dark:hover:bg-white/5"
               )}
             >
-              {tab.label}
+              {t(`tabs.${tab.id}`)}
             </button>
           ))}
         </div>
@@ -963,16 +959,20 @@ export function Settings() {
                 <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
                   <Label className="text-[13px] text-muted-foreground">OpenClaw</Label>
                   <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
-                    {openClawRuntime?.running ? t('common:running') : openClawRuntime?.installed ? t('common:stopped') : 'Not installed'}
+                    {runtimeStatus === null
+                      ? <span className="inline-block w-20 h-7 rounded bg-foreground/10 animate-pulse" />
+                      : openClawRuntime?.running ? t('common:running') : openClawRuntime?.installed ? t('common:stopped') : 'Not installed'}
                   </div>
-                  <p className="text-[12px] text-muted-foreground">{openClawRuntime?.version ?? 'local'}</p>
+                  <p className="text-[12px] text-muted-foreground">{runtimeStatus === null ? '—' : (openClawRuntime?.version ?? 'local')}</p>
                 </div>
                 <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
                   <Label className="text-[13px] text-muted-foreground">HermesAgent</Label>
                   <div className="text-2xl font-serif text-foreground" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
-                    {hermesRuntime?.running ? t('common:running') : hermesRuntime?.installed ? t('common:stopped') : 'Not installed'}
+                    {runtimeStatus === null
+                      ? <span className="inline-block w-20 h-7 rounded bg-foreground/10 animate-pulse" />
+                      : hermesRuntime?.running ? t('common:running') : hermesRuntime?.installed ? t('common:stopped') : 'Not installed'}
                   </div>
-                  <p className="text-[12px] text-muted-foreground">{hermesAgentVersion}</p>
+                  <p className="text-[12px] text-muted-foreground">{runtimeStatus === null ? '—' : hermesAgentVersion}</p>
                 </div>
                 <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-5 space-y-3">
                   <Label className="text-[13px] text-muted-foreground">Bridge</Label>
@@ -2046,8 +2046,9 @@ export function Settings() {
                       data-testid="settings-runtime-openclaw-update-check-button"
                       disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
                       onClick={() => void handleOpenClawRuntimeAction('check-update')}
-                      className="h-8 rounded-full px-3"
+                      className="rounded-full h-8 px-4"
                     >
+                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', openClawRuntimeActionLoading === 'check-update' && 'animate-spin')} />
                       Check Update
                     </Button>
                     <Button
@@ -2057,8 +2058,9 @@ export function Settings() {
                       data-testid="settings-runtime-openclaw-update-apply-button"
                       disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
                       onClick={() => void handleOpenClawRuntimeAction('apply-update')}
-                      className="h-8 rounded-full px-3"
+                      className="rounded-full h-8 px-4"
                     >
+                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', openClawRuntimeActionLoading === 'apply-update' && 'animate-spin')} />
                       Apply Update
                     </Button>
                     <Button
@@ -2068,7 +2070,7 @@ export function Settings() {
                       data-testid="settings-runtime-openclaw-rollback-button"
                       disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
                       onClick={() => void handleOpenClawRuntimeAction('rollback')}
-                      className="h-8 rounded-full px-3"
+                      className="rounded-full h-8 px-4"
                     >
                       Rollback
                     </Button>

@@ -27,7 +27,7 @@
     },
     "welcome": {
     "title": "Welcome to HermesClaw",
-    "description": "HermesClaw is a graphical interface for OpenClaw, making it easy to use AI assistants across your favorite messaging platforms.",
+    "description": "HermesClaw is a desktop workspace for running and managing AI agents. Configure model providers, install skills, connect messaging channels, and operate agent workflows — all from one local-first application.",
         "features": {
             "noCommand": "Zero command-line required",
             "modernUI": "Modern, beautiful interface",

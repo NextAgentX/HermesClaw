@@ -218,6 +218,10 @@ echo`   Skipped ${skippedDevCount} dev-only package references`;
 //     then BFS its transitive deps exactly like we did for openclaw above.
 const EXTRA_BUNDLED_PACKAGES = [
   '@whiskeysockets/baileys',   // WhatsApp channel (was a dep of old clawdbot, not openclaw)
+  '@soimy/dingtalk',
+  '@wecom/wecom-openclaw-plugin',
+  '@larksuite/openclaw-lark',
+  '@tencent-weixin/openclaw-weixin',
 ];
 
 let extraCount = 0;
@@ -861,6 +865,10 @@ patchOpenClawRuntimeRoot(OUTPUT);
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));
 const distExists = fs.existsSync(path.join(OUTPUT, 'dist', 'entry.js'));
+const requiredRuntimeFiles = [
+  path.join(OUTPUT, 'node_modules', 'qrcode-terminal', 'vendor', 'QRCode', 'index.js'),
+];
+const missingRuntimeFiles = requiredRuntimeFiles.filter((file) => !fs.existsSync(file));
 
 echo``;
 echo`✅ Bundle complete: ${OUTPUT}`;
@@ -870,8 +878,11 @@ echo`   Duplicate versions skipped: ${skippedDupes}`;
 echo`   Total discovered: ${collected.size}`;
 echo`   openclaw.mjs: ${entryExists ? '✓' : '✗'}`;
 echo`   dist/entry.js: ${distExists ? '✓' : '✗'}`;
+for (const file of requiredRuntimeFiles) {
+  echo`   ${path.relative(OUTPUT, file)}: ${fs.existsSync(file) ? '✓' : '✗'}`;
+}
 
-if (!entryExists || !distExists) {
+if (!entryExists || !distExists || missingRuntimeFiles.length > 0) {
   echo`❌ Bundle verification failed!`;
   process.exit(1);
 }

@@ -1,6 +1,15 @@
 {
   "title": "Настройки",
   "subtitle": "Настройте ваш опыт работы с HermesClaw",
+  "tabs": {
+    "overview": "Обзор",
+    "appearance": "Оформление и запуск",
+    "runtime": "Среда выполнения",
+    "updates": "Обновления",
+    "integration": "Интеграция HermesClaw",
+    "advanced": "Расширенные и диагностика",
+    "about": "О программе"
+  },
   "appearance": {
     "title": "Общие",
     "description": "Настройте внешний вид",

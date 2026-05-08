@@ -1,6 +1,15 @@
 {
   "title": "設定",
   "subtitle": "HermesClaw の体験をカスタマイズ",
+  "tabs": {
+    "overview": "概要",
+    "appearance": "外観と起動",
+    "runtime": "ランタイム",
+    "updates": "アップデート",
+    "integration": "HermesClaw 連携",
+    "advanced": "詳細と診断",
+    "about": "このアプリについて"
+  },
   "appearance": {
     "title": "通用",
     "description": "外観とスタイルをカスタマイズ",

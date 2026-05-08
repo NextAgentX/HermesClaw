@@ -21,7 +21,7 @@ describe('OpenClaw packaging configuration', () => {
   it('keeps OpenClaw pinned by default while exposing a bundle command', () => {
     const pkg = readJson<PackageJson>('package.json');
 
-    expect(pkg.devDependencies?.openclaw).toBe('2026.4.15');
+    expect(pkg.devDependencies?.openclaw).toBe('2026.4.27');
     expect(pkg.scripts['bundle:openclaw']).toBe('zx scripts/bundle-openclaw.mjs');
     expect(pkg.scripts.build).toContain('zx scripts/bundle-openclaw.mjs');
     expect(pkg.scripts.package).toContain('zx scripts/bundle-openclaw.mjs');
@@ -35,5 +35,16 @@ describe('OpenClaw packaging configuration', () => {
     expect(bundleScript).toContain('resolveOpenClawSource');
     expect(bundleScript).toContain("'build', '.openclaw-source'");
     expect(bundleScript).toContain('pnpm add');
+  });
+
+  it('bundles channel plugin runtime dependencies into OpenClaw resources', () => {
+    const bundleScript = readText('scripts/bundle-openclaw.mjs');
+
+    expect(bundleScript).toContain('@tencent-weixin/openclaw-weixin');
+    expect(bundleScript).toContain('@soimy/dingtalk');
+    expect(bundleScript).toContain('@wecom/wecom-openclaw-plugin');
+    expect(bundleScript).toContain('@larksuite/openclaw-lark');
+    expect(bundleScript).toContain('qrcode-terminal');
+    expect(bundleScript).toContain("'vendor', 'QRCode', 'index.js'");
   });
 });

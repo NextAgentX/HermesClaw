@@ -1,6 +1,15 @@
 {
   "title": "设置",
   "subtitle": "配置您的 HermesClaw 体验",
+  "tabs": {
+    "overview": "概览",
+    "appearance": "外观与启动",
+    "runtime": "运行时",
+    "updates": "更新",
+    "integration": "HermesClaw 集成",
+    "advanced": "高级与诊断",
+    "about": "关于"
+  },
   "appearance": {
     "title": "通用",
     "description": "自定义外观和风格",

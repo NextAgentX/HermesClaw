@@ -27,7 +27,7 @@
     },
     "welcome": {
     "title": "欢迎使用 HermesClaw",
-    "description": "HermesClaw 是 OpenClaw 的图形界面，让您可以在喜爱的消息平台上轻松使用 AI 助手。",
+    "description": "HermesClaw 是一个用于运行和管理 AI Agent 的桌面工作台。配置模型提供商、安装技能、连接消息渠道并管理 Agent 工作流——一切尽在一个本地优先的应用中。",
         "features": {
             "noCommand": "无需命令行",
             "modernUI": "现代美观的界面",
