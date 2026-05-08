@@ -1,11 +1,13 @@
 const MULTI_INSTANCE_PROVIDER_TYPES = new Set(['custom', 'ollama']);
 
 export const OPENCLAW_PROVIDER_KEY_MINIMAX = 'minimax-portal';
+export const OPENCLAW_PROVIDER_KEY_COPILOT = 'copilot';
 export const OPENCLAW_PROVIDER_KEY_MOONSHOT = 'moonshot';
 export const OPENCLAW_PROVIDER_KEY_MOONSHOT_GLOBAL = 'moonshot-global';
-export const OAUTH_PROVIDER_TYPES = ['minimax-portal', 'minimax-portal-cn'] as const;
+export const OAUTH_PROVIDER_TYPES = ['minimax-portal', 'minimax-portal-cn', 'copilot'] as const;
 export const OPENCLAW_OAUTH_PLUGIN_PROVIDER_KEYS = [
   OPENCLAW_PROVIDER_KEY_MINIMAX,
+  OPENCLAW_PROVIDER_KEY_COPILOT,
 ] as const;
 
 const OAUTH_PROVIDER_TYPE_SET = new Set<string>(OAUTH_PROVIDER_TYPES);
@@ -51,18 +53,25 @@ export function isMiniMaxProviderType(type: string): boolean {
   return type === OPENCLAW_PROVIDER_KEY_MINIMAX || type === 'minimax-portal-cn';
 }
 
+export function isCopilotProviderType(type: string): boolean {
+  return type === OPENCLAW_PROVIDER_KEY_COPILOT;
+}
+
 export function getOAuthProviderTargetKey(type: string): string | undefined {
   if (!isOAuthProviderType(type)) return undefined;
+  if (isCopilotProviderType(type)) return OPENCLAW_PROVIDER_KEY_COPILOT;
   return OPENCLAW_PROVIDER_KEY_MINIMAX;
 }
 
-export function getOAuthProviderApi(type: string): 'anthropic-messages' | undefined {
+export function getOAuthProviderApi(type: string): 'anthropic-messages' | 'openai-completions' | undefined {
   if (!isOAuthProviderType(type)) return undefined;
+  if (isCopilotProviderType(type)) return 'openai-completions';
   return 'anthropic-messages';
 }
 
 export function getOAuthProviderDefaultBaseUrl(type: string): string | undefined {
   if (!isOAuthProviderType(type)) return undefined;
+  if (isCopilotProviderType(type)) return 'https://api.githubcopilot.com';
   if (type === OPENCLAW_PROVIDER_KEY_MINIMAX) return 'https://api.minimax.io/anthropic';
   if (type === 'minimax-portal-cn') return 'https://api.minimaxi.com/anthropic';
   return undefined;
@@ -79,6 +88,7 @@ export function usesOAuthAuthHeader(providerKey: string): boolean {
 
 export function getOAuthApiKeyEnv(providerKey: string): string | undefined {
   if (providerKey === OPENCLAW_PROVIDER_KEY_MINIMAX) return 'minimax-oauth';
+  if (providerKey === OPENCLAW_PROVIDER_KEY_COPILOT) return 'copilot-oauth';
   return undefined;
 }
 

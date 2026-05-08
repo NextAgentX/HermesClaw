@@ -23,11 +23,12 @@ import { getProviderDefaultModel } from './provider-registry';
 import { proxyAwareFetch } from './proxy-fetch';
 import { saveOAuthTokenToOpenClaw, setOpenClawDefaultModelWithOverride } from './openclaw-auth';
 import { loginMiniMaxPortalOAuth, type MiniMaxOAuthToken, type MiniMaxRegion } from './minimax-oauth';
+import { loginGitHubCopilot, type CopilotOAuthToken } from './copilot-oauth';
 
-export type OAuthProviderType = 'minimax-portal' | 'minimax-portal-cn';
+export type OAuthProviderType = 'minimax-portal' | 'minimax-portal-cn' | 'copilot';
 
 // Re-export types for consumers
-export type { MiniMaxRegion, MiniMaxOAuthToken };
+export type { MiniMaxRegion, MiniMaxOAuthToken, CopilotOAuthToken };
 
 // ─────────────────────────────────────────────────────────────
 // DeviceOAuthManager
@@ -74,6 +75,8 @@ class DeviceOAuthManager extends EventEmitter {
             if (provider === 'minimax-portal' || provider === 'minimax-portal-cn') {
                 const actualRegion = provider === 'minimax-portal-cn' ? 'cn' : (region || 'global');
                 await this.runMiniMaxFlow(actualRegion, provider);
+            } else if (provider === 'copilot') {
+                await this.runCopilotFlow();
             } else {
                 throw new Error(`Unsupported OAuth provider type: ${provider}`);
             }
@@ -149,6 +152,46 @@ class DeviceOAuthManager extends EventEmitter {
     }
 
 
+    // ─────────────────────────────────────────────────────────
+    // GitHub Copilot flow
+    // ─────────────────────────────────────────────────────────
+
+    private async runCopilotFlow(): Promise<void> {
+        const provider = this.activeProvider!;
+
+        const token: CopilotOAuthToken = await this.runWithProxyAwareFetch(() => loginGitHubCopilot({
+            openUrl: async (url: string) => {
+                logger.info(`[DeviceOAuth] Copilot opening browser: ${url}`);
+                shell.openExternal(url).catch((err: unknown) =>
+                    logger.warn(`[DeviceOAuth] Failed to open browser:`, err)
+                );
+            },
+            note: async (message: string, _title?: string) => {
+                if (!this.active) return;
+                const { verificationUri, userCode } = this.parseNote(message);
+                if (verificationUri && userCode) {
+                    this.emitCode({ provider, verificationUri, userCode, expiresIn: 900 });
+                } else {
+                    logger.info(`[DeviceOAuth] Copilot note: ${message}`);
+                }
+            },
+            progress: {
+                update: (msg: string) => logger.info(`[DeviceOAuth] Copilot progress: ${msg}`),
+                stop: (msg?: string) => logger.info(`[DeviceOAuth] Copilot progress done: ${msg ?? ''}`),
+            },
+        }));
+
+        if (!this.active) return;
+
+        await this.onSuccess('copilot', {
+            access: token.accessToken,
+            refresh: '',
+            expires: Date.now() + 8 * 60 * 60 * 1000, // ~8 hours
+            api: 'openai-completions',
+        });
+    }
+
+
 
     // ─────────────────────────────────────────────────────────
     // Success handler
@@ -189,24 +232,30 @@ class DeviceOAuthManager extends EventEmitter {
         //    This mirrors what the OpenClaw plugin's configPatch does after CLI login.
         //    The baseUrl comes from token.resourceUrl (per-account URL from the OAuth server)
         //    or falls back to the provider's default public endpoint.
-        const defaultBaseUrl = providerType === 'minimax-portal'
-            ? 'https://api.minimax.io/anthropic'
-            : 'https://api.minimaxi.com/anthropic';
+        let baseUrl: string;
+        if (providerType === 'copilot') {
+            baseUrl = 'https://api.githubcopilot.com';
+        } else {
+            const defaultBaseUrl = providerType === 'minimax-portal'
+                ? 'https://api.minimax.io/anthropic'
+                : 'https://api.minimaxi.com/anthropic';
 
-        let baseUrl = token.resourceUrl || defaultBaseUrl;
+            baseUrl = token.resourceUrl || defaultBaseUrl;
 
-        // Ensure baseUrl has a protocol prefix
-        if (baseUrl && !baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-            baseUrl = 'https://' + baseUrl;
-        }
+            // Ensure baseUrl has a protocol prefix
+            if (baseUrl && !baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+                baseUrl = 'https://' + baseUrl;
+            }
 
-        // Ensure the base URL ends with /anthropic
-        if (providerType.startsWith('minimax-portal') && baseUrl) {
-            baseUrl = baseUrl.replace(/\/v1$/, '').replace(/\/anthropic$/, '').replace(/\/$/, '') + '/anthropic';
+            // Ensure the base URL ends with /anthropic
+            if (providerType.startsWith('minimax-portal') && baseUrl) {
+                baseUrl = baseUrl.replace(/\/v1$/, '').replace(/\/anthropic$/, '').replace(/\/$/, '') + '/anthropic';
+            }
         }
 
         try {
             const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
+            const apiKeyEnv = providerType === 'copilot' ? 'copilot-oauth' : 'minimax-oauth';
             await setOpenClawDefaultModelWithOverride(tokenProviderId, undefined, {
                 baseUrl,
                 api: token.api,
@@ -214,7 +263,7 @@ class DeviceOAuthManager extends EventEmitter {
                 authHeader: providerType.startsWith('minimax-portal') ? true : undefined,
                 // OAuth placeholder — tells Gateway to resolve credentials
                 // from auth-profiles.json (type: 'oauth') instead of a static API key.
-                apiKeyEnv: 'minimax-oauth',
+                apiKeyEnv,
             });
         } catch (err) {
             logger.warn(`[DeviceOAuth] Failed to configure openclaw models:`, err);
@@ -225,6 +274,7 @@ class DeviceOAuthManager extends EventEmitter {
         const nameMap: Record<OAuthProviderType, string> = {
             'minimax-portal': 'MiniMax (Global)',
             'minimax-portal-cn': 'MiniMax (CN)',
+            'copilot': 'GitHub Copilot',
         };
         const providerConfig: ProviderConfig = {
             id: accountId,
