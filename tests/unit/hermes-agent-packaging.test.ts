@@ -65,6 +65,8 @@ describe('HermesAgent packaging configuration', () => {
     expect(bundleScript).toContain('HERMES_AGENT_RELEASE_TAG');
     expect(bundleScript).toContain('HERMES_AGENT_INSTALL_SPEC');
     expect(bundleScript).toContain('HERMES_AGENT_PYTHON_VERSION');
+    expect(bundleScript).toContain('HERMES_AGENT_PIP_ARGS');
+    expect(bundleScript).toContain('runCommandWithRetries');
     expect(bundleScript).toContain("'build', 'hermes-agent'");
     expect(bundleScript).toContain("'pip', 'install'");
     expect(bundleScript).toContain('installSpec');

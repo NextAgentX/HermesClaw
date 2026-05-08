@@ -99,6 +99,34 @@ function runCommand(command, args) {
   });
 }
 
+function parseExtraArgs(value) {
+  if (!value?.trim()) return [];
+
+  const matches = value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+  return matches.map((arg) => arg.replace(/^(["'])(.*)\1$/, '$2'));
+}
+
+async function runCommandWithRetries(command, args, options = {}) {
+  const attempts = options.attempts || 3;
+  const delayMs = options.delayMs || 5000;
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await runCommand(command, args);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts) break;
+
+      echo`⚠️  Command failed, retrying ${attempt + 1}/${attempts} after ${delayMs}ms...`;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError;
+}
+
 function wrapperContent(entrypoint, venvDir) {
   if (os.platform() === 'win32') {
     const scriptPath = path.join(venvDir, 'Scripts', `${entrypoint}.exe`);
@@ -145,6 +173,7 @@ async function bundleHermesAgent() {
   const venvDir = path.join(OUTPUT, '.venv');
   const pythonPath = getVenvPython(venvDir);
   const packageSpec = manifest.installSpec;
+  const pipArgs = parseExtraArgs(process.env.HERMES_AGENT_PIP_ARGS);
 
   echo`📦 Bundling HermesAgent ${manifest.version} (${manifest.releaseTag})...`;
   echo`   uv: ${uvBinary}`;
@@ -154,7 +183,11 @@ async function bundleHermesAgent() {
   await fs.ensureDir(OUTPUT);
 
   await runCommand(uvBinary, ['venv', '--python', manifest.pythonVersion, venvDir]);
-  await runCommand(uvBinary, ['pip', 'install', '--python', pythonPath, packageSpec]);
+  await runCommandWithRetries(
+    uvBinary,
+    ['pip', 'install', '--python', pythonPath, ...pipArgs, packageSpec],
+    { attempts: 4, delayMs: 5000 },
+  );
 
   await fs.writeFile(path.join(OUTPUT, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeWrappers(manifest, venvDir);
