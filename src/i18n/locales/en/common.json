@@ -10,7 +10,6 @@
         "settings": "Settings",
         "devConsole": "Developer Console",
         "models": "Models",
-        "expertCenter": "Expert Center",
         "deleteSessionConfirm": "Are you sure you want to delete session \"{{label}}\"?",
         "openClawPage": "OpenClaw Page"
     },
