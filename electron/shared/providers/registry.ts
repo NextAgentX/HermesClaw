@@ -149,8 +149,8 @@ export const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     apiKeyUrl: 'https://github.com/settings/tokens',
     category: 'official',
     envVar: 'GITHUB_TOKEN',
-    supportedAuthModes: ['api_key', 'oauth'],
-    defaultAuthMode: 'oauth',
+    supportedAuthModes: ['api_key', 'oauth_device'],
+    defaultAuthMode: 'oauth_device',
     supportsMultipleAccounts: true,
     providerConfig: {
       baseUrl: 'https://api.githubcopilot.com',
