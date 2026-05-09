@@ -18,8 +18,8 @@
 - `src/lib/api-client.ts` is the intentional exception: it abstracts `ipc|ws|http`, registers default WS/HTTP invokers, and defaults host calls to IPC unless transport rules prefer otherwise.
 
 ## Commands and verification
-- First setup: `pnpm run init` (`pnpm install && pnpm run uv:download`).
-- Dev server: `pnpm run dev`; `predev` automatically runs `node scripts/generate-ext-bridge.mjs && zx scripts/prepare-preinstalled-skills-dev.mjs` before Vite.
+- First setup: `pnpm run init` — runs `pnpm install && pnpm run uv:download && pnpm run patch:openclaw-runtime && pnpm run bundle:openclaw && pnpm run bundle:hermes-agent`; all steps required on fresh clone.
+- Dev server: `pnpm run dev`; `predev` automatically runs `pnpm run patch:openclaw-runtime && node scripts/generate-ext-bridge.mjs && zx scripts/prepare-preinstalled-skills-dev.mjs` before Vite.
 - If extension bridge imports are missing or stale, run `pnpm run ext:bridge`.
 - Fast build check: `pnpm run build:vite`; full distributable build: `pnpm run build` (bridge generation, Vite build, OpenClaw/plugin/preinstalled-skills bundling, then `electron-builder`).
 - Focused checks: `pnpm run typecheck`, `pnpm run test`, `pnpm run test:e2e`; `pnpm run lint` is `eslint . --fix` and may mutate files.
@@ -48,6 +48,11 @@
 - Packaging commands: Windows `pnpm run prep:win-binaries && pnpm run package:win`; mac `pnpm run package:mac` or local skip-skills path `SKIP_PREINSTALLED_SKILLS=1 pnpm run package && electron-builder --mac --publish never`; Linux `pnpm run package:linux`.
 - Do not run `pnpm run release` unless intentionally publishing; `postversion` pushes commits and tags, and release CI validates the tag against `package.json` via `scripts/assert-tag-matches-package.mjs`.
 - Comms regression: `pnpm run comms:replay` writes `artifacts/comms/current-metrics.json`; `pnpm run comms:compare` enforces baseline thresholds/scenarios; `pnpm run comms:baseline` updates the baseline.
+
+## Gateway and runtime timing gotchas
+- `GatewayManager` (`electron/gateway/manager.ts`) extends `EventEmitter` and emits `gateway:ready` when gateway subsystems are ready; `GATEWAY_READY_FALLBACK_MS = 30_000` fires as a fallback if the event never arrives.
+- `getStatus()` on `GatewayManager` returns a `GatewayStatus` with `state` and `gatewayReady` fields. After `restart()`, poll `state === 'running'` first, then wait for `gatewayReady === true` via the event rather than a short polling loop.
+- `electron/api/routes/runtime-mode.ts` contains `withOpenClawApplyReadinessAndRollback()` which orchestrates apply → restart → readiness check → rollback on failure. The readiness check must wait up to 30s (match `GATEWAY_READY_FALLBACK_MS`); using a short poll risks false-rollback.
 
 ## Environment values worth not rediscovering
 - `.env.example` documents `OPENCLAW_GATEWAY_PORT=18789`, `VITE_DEV_SERVER_PORT=5173`, and release signing variables (`APPLE_*`, `CSC_*`, `GH_TOKEN`).

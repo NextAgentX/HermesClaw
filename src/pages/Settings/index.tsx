@@ -883,11 +883,13 @@ export function Settings() {
     : hermesWslPathDisplay;
   const hermesAgentBridge = runtimeStatus?.bridge ?? hermesClawStatus?.bridge;
   const hermesAgentRuntime = runtimeStatus?.runtimes.find((runtime) => runtime.kind === 'hermes');
-  const hermesAgentVersion = hermesClawStatus?.installStatus.version
-    || hermesClawStatus?.runtimeState.runtimes.hermes?.version
-    || hermesClawActiveRuntime?.version
-    || hermesAgentRuntime?.version
-    || '—';
+  const isRealVersion = (v: string | undefined): v is string => !!v && v !== 'local';
+  const hermesAgentVersion =
+    (isRealVersion(hermesClawStatus?.installStatus.version) && hermesClawStatus!.installStatus.version) ||
+    (isRealVersion(hermesClawStatus?.runtimeState.runtimes.hermes?.version) && hermesClawStatus!.runtimeState.runtimes.hermes!.version) ||
+    (isRealVersion(hermesClawActiveRuntime?.version) && hermesClawActiveRuntime!.version) ||
+    (isRealVersion(hermesAgentRuntime?.version) && hermesAgentRuntime!.version) ||
+    '—';
   const hermesAgentStatusLabel = hermesAgentBridge
     ? !hermesAgentBridge.enabled
       ? 'Disabled'
@@ -1116,15 +1118,18 @@ export function Settings() {
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div>
                     <Label className="text-[15px] font-medium text-foreground">{t('gateway.runtimeStatusTitle')}</Label>
-                    <p className="text-[13px] text-muted-foreground mt-1" data-testid="settings-runtime-hint">
-                      {runtimeStatusError
-                        ? runtimeStatusError
-                        : runtimeStatus
-                          ? runtimeModeHint
-                          : runtimeStatusLoading
-                            ? t('gateway.runtimeStatusLoading')
-                            : t('gateway.runtimeStatusUnavailable')}
-                    </p>
+                     {runtimeStatusError && (
+                       <p className="text-[13px] text-muted-foreground mt-1" data-testid="settings-runtime-hint">
+                         {runtimeStatusError}
+                       </p>
+                     )}
+                     {!runtimeStatusError && !runtimeStatus && (
+                       <p className="text-[13px] text-muted-foreground mt-1" data-testid="settings-runtime-hint">
+                         {runtimeStatusLoading
+                           ? t('gateway.runtimeStatusLoading')
+                           : t('gateway.runtimeStatusUnavailable')}
+                       </p>
+                     )}
                   </div>
                   <Button
                     variant="outline"
@@ -1207,12 +1212,6 @@ export function Settings() {
                             </Badge>
                           </div>
                         </div>
-
-                        {runtime.version && runtime.kind !== 'openclaw' && (
-                          <p className="text-[12px] text-muted-foreground">
-                            {t('settings:updates.currentVersion')}: {runtime.version}
-                          </p>
-                        )}
 
                         {runtime.endpoint && (
                           <p className="text-[12px] text-muted-foreground break-all">
@@ -2038,43 +2037,7 @@ export function Settings() {
                     <Label className="text-[15px] font-medium text-foreground/90">OpenClaw Runtime</Label>
                     <p className="text-[12px] text-muted-foreground">Version {openClawRuntime?.version ?? 'local'} · {openClawRuntime?.installed ? 'Installed' : 'Not installed'}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      data-testid="settings-runtime-openclaw-update-check-button"
-                      disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
-                      onClick={() => void handleOpenClawRuntimeAction('check-update')}
-                      className="rounded-full h-8 px-4"
-                    >
-                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', openClawRuntimeActionLoading === 'check-update' && 'animate-spin')} />
-                      Check Update
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      data-testid="settings-runtime-openclaw-update-apply-button"
-                      disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
-                      onClick={() => void handleOpenClawRuntimeAction('apply-update')}
-                      className="rounded-full h-8 px-4"
-                    >
-                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', openClawRuntimeActionLoading === 'apply-update' && 'animate-spin')} />
-                      Apply Update
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      data-testid="settings-runtime-openclaw-rollback-button"
-                      disabled={!openClawRuntime?.installed || openClawRuntimeActionLoading !== null}
-                      onClick={() => void handleOpenClawRuntimeAction('rollback')}
-                      className="rounded-full h-8 px-4"
-                    >
-                      Rollback
-                    </Button>
-                  </div>
+
                 </div>
                 {openClawUpdateResult && (
                   <p className="text-[12px] text-muted-foreground" data-testid="settings-runtime-openclaw-update-result">
@@ -2093,19 +2056,7 @@ export function Settings() {
                     <Label className="text-[15px] font-medium text-foreground/90">HermesAgent Runtime</Label>
                     <p className="text-[12px] text-muted-foreground">Version {hermesAgentVersion} · {hermesAgentStatusLabel}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-check-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawCheckUpdate()} className="rounded-full h-8 px-4">
-                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'check-update' && 'animate-spin')} />
-                      Check Update
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-update-apply-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawApplyUpdate()} className="rounded-full h-8 px-4">
-                      <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', hermesClawActionLoading === 'apply-update' && 'animate-spin')} />
-                      Apply Update
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" data-testid="settings-hermesclaw-rollback-button" disabled={hermesClawActionLoading != null} onClick={() => void handleHermesClawRollback()} className="rounded-full h-8 px-4">
-                      Rollback
-                    </Button>
-                  </div>
+
                 </div>
                 {hermesUpdateSummary && (
                   <p className="text-[12px] text-muted-foreground" data-testid="settings-hermesclaw-update-result">

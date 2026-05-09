@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { shell } from 'electron';
-import type { GatewayDiagnosticsSnapshot, GatewayStatus } from '../../gateway/manager';
+import type { GatewayDiagnosticsSnapshot, GatewayManager, GatewayStatus } from '../../gateway/manager';
 import { InstallerOrchestrator } from '../../runtime/installer-orchestrator';
 import {
   applyOpenClawRuntimeUpdate,
@@ -165,19 +165,24 @@ async function waitForOpenClawGatewayRunning(ctx: HostApiContext): Promise<void>
   }
 }
 
+async function waitForOpenClawGatewayReadyEvent(
+  gatewayManager: GatewayManager,
+  timeoutMs = 30_000
+): Promise<void> {
+  if (gatewayManager.getStatus().gatewayReady) return;
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    gatewayManager.once('gateway:ready', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 async function restartOpenClawGateway(ctx: HostApiContext): Promise<OpenClawGatewayReadiness> {
   await ctx.gatewayManager.restart();
-
   await waitForOpenClawGatewayRunning(ctx);
-
-  for (let attempt = 0; attempt < OPENCLAW_GATEWAY_READY_ATTEMPTS; attempt += 1) {
-    const readiness = await readOpenClawGatewayReadiness(ctx);
-    if (readiness.gatewayReady) {
-      return { gatewayRefreshAction: 'restart', ...readiness };
-    }
-    await sleep(OPENCLAW_GATEWAY_READY_INTERVAL_MS);
-  }
-
+  await waitForOpenClawGatewayReadyEvent(ctx.gatewayManager, 30_000);
   return { gatewayRefreshAction: 'restart', ...await readOpenClawGatewayReadiness(ctx) };
 }
 

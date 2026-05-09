@@ -1055,13 +1055,18 @@ function assertHermesCandidateCompatible(
   }
 }
 
-async function restartAndCheckHermes(): Promise<{ ok: boolean; error?: string }> {
+async function restartAndCheckHermes(timeoutMs = 30_000): Promise<{ ok: boolean; error?: string }> {
   const manager = getHermesStandaloneManager();
   await manager.restart();
-  const health = await manager.checkHealth();
-  return health.ok
-    ? { ok: true }
-    : { ok: false, error: health.error ?? 'Hermes health check failed after runtime update' };
+  const deadline = Date.now() + timeoutMs;
+  let lastError: string | undefined;
+  while (Date.now() < deadline) {
+    const health = await manager.checkHealth();
+    if (health.ok) return { ok: true };
+    lastError = health.error;
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+  }
+  return { ok: false, error: lastError ?? 'Hermes health check failed after runtime update' };
 }
 
 function checkPython(): HermesClawDoctorCheck {

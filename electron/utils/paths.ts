@@ -209,11 +209,24 @@ function getBundledHermesAgentPythonPath(runtimeDir: string): string {
 function readBundledHermesAgentVersion(runtimeDir: string): string | undefined {
   try {
     const manifestPath = join(runtimeDir, 'manifest.json');
-    if (!existsSync(manifestPath)) {
-      return undefined;
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { version?: string };
+      if (manifest.version) return manifest.version;
     }
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { version?: string };
-    return manifest.version;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readResourcesHermesAgentVersion(): string | undefined {
+  try {
+    const resourcesManifestPath = join(getElectronApp().getAppPath(), 'resources', 'hermes-agent', 'manifest.json');
+    if (existsSync(resourcesManifestPath)) {
+      const manifest = JSON.parse(readFileSync(resourcesManifestPath, 'utf-8')) as { version?: string };
+      return manifest.version;
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -345,6 +358,14 @@ function mergeHermesProbeErrors(statuses: HermesInstallStatus[]): string | undef
 
 export function getHermesInstallStatus(options: HermesInstallStatusOptions = {}): HermesInstallStatus {
   const bundledStatus = buildBundledHermesInstallStatus();
+  const resourcesVersion = readResourcesHermesAgentVersion();
+
+  const withVersionFallback = (status: HermesInstallStatus): HermesInstallStatus => {
+    if (!status.version && resourcesVersion) {
+      return { ...status, version: resourcesVersion };
+    }
+    return status;
+  };
 
   if (process.platform === 'win32') {
     const preferredMode = options.windowsHermesPreferredMode ?? 'wsl2';
@@ -356,25 +377,25 @@ export function getHermesInstallStatus(options: HermesInstallStatusOptions = {})
 
     const installedStatus = orderedStatuses.find((status) => status.installed);
     if (installedStatus) {
-      return installedStatus;
+      return withVersionFallback(installedStatus);
     }
 
     if (bundledStatus) {
-      return bundledStatus;
+      return withVersionFallback(bundledStatus);
     }
 
     const primaryStatus = orderedStatuses[0];
-    return {
+    return withVersionFallback({
       ...primaryStatus,
       error: mergeHermesProbeErrors(orderedStatuses) ?? primaryStatus.error,
-    };
+    });
   }
 
   const nativeStatus = buildNativeHermesInstallStatus(options.windowsHermesNativePath);
   if (nativeStatus.installed) {
-    return nativeStatus;
+    return withVersionFallback(nativeStatus);
   }
-  return bundledStatus ?? nativeStatus;
+  return withVersionFallback(bundledStatus ?? nativeStatus);
 }
 
 /**
