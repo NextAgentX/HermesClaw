@@ -19,6 +19,7 @@ import { handleCronRoutes } from './routes/cron';
 import { handleDiagnosticsRoutes } from './routes/diagnostics';
 import { handleRuntimeModeRoutes } from './routes/runtime-mode';
 import { handleBridgeRoutes } from './routes/bridges';
+import { handleExpertRoutes } from './routes/experts';
 import { sendJson, setCorsHeaders, requireJsonContentType } from './route-utils';
 
 type RouteHandler = (
@@ -37,6 +38,7 @@ const coreRouteHandlers: RouteHandler[] = [
   handleProviderRoutes,
   handleAgentRoutes,
   handleChannelRoutes,
+  handleExpertRoutes,
   handleSkillRoutes,
   handleFileRoutes,
   handleSessionRoutes,
