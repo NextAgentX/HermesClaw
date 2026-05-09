@@ -1162,6 +1162,22 @@ export async function getActiveOpenClawProviders(): Promise<Set<string>> {
     activeProviders.delete(deprecated);
   }
 
+  // Normalize plugin-scoped provider IDs to HermesClaw vendorIds.
+  // The github-copilot plugin uses 'github-copilot/' as its model prefix and
+  // 'github-copilot' in auth-profiles, but HermesClaw tracks copilot accounts
+  // under vendorId='copilot'. Without this normalization, listAccounts() would
+  // encounter 'github-copilot' as an activeProvider key, fail to find a matching
+  // store account, and seed a phantom "Custom" provider entry.
+  const PLUGIN_PROVIDER_ID_NORMALIZATION: Record<string, string> = {
+    'github-copilot': 'copilot',
+  };
+  for (const [pluginId, vendorId] of Object.entries(PLUGIN_PROVIDER_ID_NORMALIZATION)) {
+    if (activeProviders.has(pluginId)) {
+      activeProviders.delete(pluginId);
+      activeProviders.add(vendorId);
+    }
+  }
+
   return activeProviders;
 }
 
