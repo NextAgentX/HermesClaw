@@ -940,6 +940,57 @@ function ensureMoonshotKimiWebSearchCnBaseUrl(config: Record<string, unknown>, p
 }
 
 /**
+ * Configure openclaw.json to use the github-copilot *plugin* for API calls
+ * rather than a raw static provider entry.
+ *
+ * The github-copilot plugin's `prepareRuntimeAuth` exchanges the raw gho_*
+ * token (stored in auth-profiles.json as type:'token') for a short-lived
+ * Copilot tid= token, adds the required IDE headers (User-Agent, Editor-Version,
+ * etc.), and resolves the correct API base URL from the token's proxy-ep field.
+ *
+ * Unlike other providers, we must NOT write a `models.providers.copilot` entry
+ * because that would route calls through a static pass-through path instead
+ * of the plugin.  We also remove any stale entry from previous OAuth attempts.
+ */
+export async function setCopilotPluginConfigToOpenClaw(
+  defaultModel = 'github-copilot/gpt-4o',
+): Promise<void> {
+  return withConfigLock(async () => {
+    const config = await readOpenClawJson();
+
+    // 1. Set default model using the plugin's provider prefix (github-copilot/)
+    const agents = (config.agents || {}) as Record<string, unknown>;
+    const defaults = (agents.defaults || {}) as Record<string, unknown>;
+    defaults.model = { primary: defaultModel, fallbacks: [] };
+    agents.defaults = defaults;
+    config.agents = agents;
+
+    // 2. Remove any stale static provider entries for 'copilot' key
+    //    (written by previous setOpenClawDefaultModelWithOverride calls)
+    const models = (config.models || {}) as Record<string, unknown>;
+    const providers = (models.providers || {}) as Record<string, unknown>;
+    delete providers['copilot'];
+    models.providers = providers;
+    config.models = models;
+
+    // 3. Ensure 'github-copilot' plugin is in plugins.allow and plugins.entries
+    const plugins = (config.plugins || {}) as Record<string, unknown>;
+    const allow = Array.isArray(plugins.allow) ? [...plugins.allow as string[]] : [];
+    if (!allow.includes('github-copilot')) {
+      allow.push('github-copilot');
+    }
+    const pEntries = (plugins.entries || {}) as Record<string, unknown>;
+    pEntries['github-copilot'] = { enabled: true };
+    plugins.allow = allow;
+    plugins.entries = pEntries;
+    config.plugins = plugins;
+
+    await writeOpenClawJson(config);
+    console.log(`Configured openclaw.json to use github-copilot plugin (model: ${defaultModel})`);
+  });
+}
+
+/**
  * Register or update a provider's configuration in openclaw.json
  * without changing the current default model.
  */

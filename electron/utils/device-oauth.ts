@@ -21,7 +21,7 @@ import { logger } from './logger';
 import { saveProvider, getProvider, ProviderConfig } from './secure-storage';
 import { getProviderDefaultModel } from './provider-registry';
 import { proxyAwareFetch } from './proxy-fetch';
-import { saveOAuthTokenToOpenClaw, saveCopilotGitHubTokenToOpenClaw, setOpenClawDefaultModelWithOverride } from './openclaw-auth';
+import { saveOAuthTokenToOpenClaw, saveCopilotGitHubTokenToOpenClaw, setCopilotPluginConfigToOpenClaw, setOpenClawDefaultModelWithOverride } from './openclaw-auth';
 import { loginMiniMaxPortalOAuth, type MiniMaxOAuthToken, type MiniMaxRegion } from './minimax-oauth';
 import { loginGitHubCopilot, type CopilotOAuthToken } from './copilot-oauth';
 
@@ -259,18 +259,24 @@ class DeviceOAuthManager extends EventEmitter {
             }
         }
 
+        // 2. Write openclaw.json config
         try {
-            const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
-            const apiKeyEnv = providerType === 'copilot' ? 'copilot-oauth' : 'minimax-oauth';
-            await setOpenClawDefaultModelWithOverride(tokenProviderId, undefined, {
-                baseUrl,
-                api: token.api,
-                // Tells OpenClaw's anthropic adapter to use `Authorization: Bearer` instead of `x-api-key`
-                authHeader: providerType.startsWith('minimax-portal') ? true : undefined,
-                // OAuth placeholder — tells Gateway to resolve credentials
-                // from auth-profiles.json (type: 'oauth') instead of a static API key.
-                apiKeyEnv,
-            });
+            if (providerType === 'copilot') {
+                // For Copilot we use the plugin-based path: do NOT write models.providers.copilot
+                // (that would bypass the plugin's prepareRuntimeAuth token-exchange logic).
+                // Instead just set the default model with github-copilot/ prefix and ensure
+                // the plugin is allowed. The plugin reads auth-profiles.json on its own.
+                await setCopilotPluginConfigToOpenClaw('github-copilot/gpt-4o');
+            } else {
+                const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
+                const apiKeyEnv = 'minimax-oauth';
+                await setOpenClawDefaultModelWithOverride(tokenProviderId, undefined, {
+                    baseUrl,
+                    api: token.api,
+                    authHeader: providerType.startsWith('minimax-portal') ? true : undefined,
+                    apiKeyEnv,
+                });
+            }
         } catch (err) {
             logger.warn(`[DeviceOAuth] Failed to configure openclaw models:`, err);
         }
