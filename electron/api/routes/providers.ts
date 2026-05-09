@@ -56,7 +56,12 @@ export async function handleProviderRoutes(
   }
 
   if (url.pathname === '/api/provider-accounts' && req.method === 'GET') {
-    sendJson(res, 200, await providerService.listAccounts());
+    try {
+      sendJson(res, 200, await providerService.listAccounts());
+    } catch (error) {
+      logger.error('[provider-accounts] listAccounts failed:', error);
+      sendJson(res, 200, []);
+    }
     return true;
   }
 

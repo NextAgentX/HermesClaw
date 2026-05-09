@@ -1,9 +1,29 @@
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { app } from 'electron';
+import { join } from 'node:path';
+
 // Lazy-load electron-store (ESM module) from the main process only.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let providerStore: any = null;
 
+/** Strip UTF-8 BOM from hermesclaw-providers.json if present (can be introduced by manual edits on Windows). */
+function sanitizeProviderStoreFile() {
+  try {
+    const filePath = join(app.getPath('userData'), 'hermesclaw-providers.json');
+    if (!existsSync(filePath)) return;
+    const raw = readFileSync(filePath);
+    // UTF-8 BOM: EF BB BF
+    if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) {
+      writeFileSync(filePath, raw.slice(3));
+    }
+  } catch {
+    // Non-fatal — let electron-store handle any subsequent parse errors.
+  }
+}
+
 export async function getHermesClawProviderStore() {
   if (!providerStore) {
+    sanitizeProviderStoreFile();
     const Store = (await import('electron-store')).default;
     providerStore = new Store({
       name: 'hermesclaw-providers',
