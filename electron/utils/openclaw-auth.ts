@@ -88,9 +88,16 @@ interface OAuthProfileEntry {
   projectId?: string;
 }
 
+/** Used by the GitHub Copilot plugin — expects type:'token' with a token field */
+interface TokenProfileEntry {
+  type: 'token';
+  provider: string;
+  token: string;
+}
+
 interface AuthProfilesStore {
   version: number;
-  profiles: Record<string, AuthProfileEntry | OAuthProfileEntry>;
+  profiles: Record<string, AuthProfileEntry | OAuthProfileEntry | TokenProfileEntry>;
   order?: Record<string, string[]>;
   lastGood?: Record<string, string>;
 }
@@ -424,6 +431,47 @@ export async function saveOAuthTokenToOpenClaw(
     await writeAuthProfiles(store, id);
   }
   console.log(`Saved OAuth token for provider "${provider}" to OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
+}
+
+/**
+ * Save a GitHub OAuth token (gho_*) to OpenClaw's auth-profiles.json using
+ * the `type: 'token'` format expected by the GitHub Copilot plugin.
+ *
+ * The Copilot plugin's `resolveFirstGithubToken()` reads profiles with
+ * `type: 'token'` and `provider: 'github-copilot'` to obtain the raw
+ * GitHub OAuth token, which it then exchanges for a short-lived Copilot
+ * token via `api.github.com/copilot_internal/v2/token`.
+ */
+export async function saveCopilotGitHubTokenToOpenClaw(
+  githubToken: string,
+  agentId?: string
+): Promise<void> {
+  const COPILOT_PROVIDER_ID = 'github-copilot';
+  const agentIds = agentId ? [agentId] : await discoverAgentIds();
+  if (agentIds.length === 0) agentIds.push('main');
+
+  for (const id of agentIds) {
+    const store = await readAuthProfiles(id);
+    const profileId = `${COPILOT_PROVIDER_ID}:default`;
+
+    (store.profiles[profileId] as TokenProfileEntry) = {
+      type: 'token',
+      provider: COPILOT_PROVIDER_ID,
+      token: githubToken,
+    };
+
+    if (!store.order) store.order = {};
+    if (!store.order[COPILOT_PROVIDER_ID]) store.order[COPILOT_PROVIDER_ID] = [];
+    if (!store.order[COPILOT_PROVIDER_ID].includes(profileId)) {
+      store.order[COPILOT_PROVIDER_ID].push(profileId);
+    }
+
+    if (!store.lastGood) store.lastGood = {};
+    store.lastGood[COPILOT_PROVIDER_ID] = profileId;
+
+    await writeAuthProfiles(store, id);
+  }
+  console.log(`Saved GitHub token for Copilot to OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
 }
 
 /**

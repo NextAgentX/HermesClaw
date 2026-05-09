@@ -21,7 +21,7 @@ import { logger } from './logger';
 import { saveProvider, getProvider, ProviderConfig } from './secure-storage';
 import { getProviderDefaultModel } from './provider-registry';
 import { proxyAwareFetch } from './proxy-fetch';
-import { saveOAuthTokenToOpenClaw, setOpenClawDefaultModelWithOverride } from './openclaw-auth';
+import { saveOAuthTokenToOpenClaw, saveCopilotGitHubTokenToOpenClaw, setOpenClawDefaultModelWithOverride } from './openclaw-auth';
 import { loginMiniMaxPortalOAuth, type MiniMaxOAuthToken, type MiniMaxRegion } from './minimax-oauth';
 import { loginGitHubCopilot, type CopilotOAuthToken } from './copilot-oauth';
 
@@ -218,12 +218,18 @@ class DeviceOAuthManager extends EventEmitter {
         //    We save both MiniMax providers to the generic "minimax-portal" profile
         //    so OpenClaw's gateway auto-refresher knows how to find it.
         try {
-            const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
-            await saveOAuthTokenToOpenClaw(tokenProviderId, {
-                access: token.access,
-                refresh: token.refresh,
-                expires: token.expires,
-            });
+            if (providerType === 'copilot') {
+                // The Copilot plugin reads type:'token' profiles with provider:'github-copilot'.
+                // Write the raw gho_* token so the plugin can exchange it for a Copilot tid= token.
+                await saveCopilotGitHubTokenToOpenClaw(token.access);
+            } else {
+                const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
+                await saveOAuthTokenToOpenClaw(tokenProviderId, {
+                    access: token.access,
+                    refresh: token.refresh,
+                    expires: token.expires,
+                });
+            }
         } catch (err) {
             logger.warn(`[DeviceOAuth] Failed to save OAuth token to OpenClaw:`, err);
         }
