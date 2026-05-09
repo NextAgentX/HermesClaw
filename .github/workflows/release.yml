@@ -33,8 +33,11 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if [ "${{ github.event.inputs.version }}" != "$PACKAGE_VERSION" ]; then
-            echo "Manual release version ${{ github.event.inputs.version }} does not match package.json version $PACKAGE_VERSION"
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          # Strip leading 'v' to allow both "0.0.1" and "v0.0.1" as input
+          NORMALIZED_VERSION="${INPUT_VERSION#v}"
+          if [ "$NORMALIZED_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Manual release version $INPUT_VERSION does not match package.json version $PACKAGE_VERSION"
             exit 1
           fi
 
