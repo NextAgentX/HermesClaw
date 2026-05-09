@@ -19,6 +19,7 @@ import { EventEmitter } from 'events';
 import { BrowserWindow, shell } from 'electron';
 import { logger } from './logger';
 import { saveProvider, getProvider, ProviderConfig } from './secure-storage';
+import { listProviderAccounts } from '../services/providers/provider-store';
 import { getProviderDefaultModel } from './provider-registry';
 import { proxyAwareFetch } from './proxy-fetch';
 import { saveOAuthTokenToOpenClaw, saveCopilotGitHubTokenToOpenClaw, setCopilotPluginConfigToOpenClaw, setOpenClawDefaultModelWithOverride } from './openclaw-auth';
@@ -282,14 +283,28 @@ class DeviceOAuthManager extends EventEmitter {
         }
 
         // 3. Save provider record in HermesClaw's own store so UI shows it as configured
-        const existing = await getProvider(accountId);
+        // For copilot (single-account OAuth), find any existing account with vendorId='copilot'
+        // and reuse its id to avoid creating duplicates on every re-authorization.
+        let resolvedAccountId = accountId;
+        if (providerType === 'copilot') {
+            try {
+                const allAccounts = await listProviderAccounts();
+                const existingCopilot = allAccounts.find(a => a.vendorId === 'copilot');
+                if (existingCopilot) {
+                    resolvedAccountId = existingCopilot.id;
+                }
+            } catch (err) {
+                logger.warn('[DeviceOAuth] Failed to look up existing copilot accounts:', err);
+            }
+        }
+        const existing = await getProvider(resolvedAccountId);
         const nameMap: Record<OAuthProviderType, string> = {
             'minimax-portal': 'MiniMax (Global)',
             'minimax-portal-cn': 'MiniMax (CN)',
             'copilot': 'GitHub Copilot',
         };
         const providerConfig: ProviderConfig = {
-            id: accountId,
+            id: resolvedAccountId,
             name: accountLabel || nameMap[providerType as OAuthProviderType] || providerType,
             type: providerType,
             enabled: existing?.enabled ?? true,
@@ -302,11 +317,11 @@ class DeviceOAuthManager extends EventEmitter {
         await saveProvider(providerConfig);
 
         // 4. Emit success internally so the main process can restart the Gateway
-        this.emit('oauth:success', { provider: providerType, accountId });
+        this.emit('oauth:success', { provider: providerType, accountId: resolvedAccountId });
 
         // 5. Emit success to frontend
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-            this.mainWindow.webContents.send('oauth:success', { provider: providerType, accountId, success: true });
+            this.mainWindow.webContents.send('oauth:success', { provider: providerType, accountId: resolvedAccountId, success: true });
         }
     }
 
