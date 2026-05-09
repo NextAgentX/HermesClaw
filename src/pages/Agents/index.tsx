@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Bot, Check, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react';
+import { AGENT_PRESETS, getPresetById, type AgentPreset } from '@/data/agent-presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -413,15 +414,38 @@ function AddAgentDialog({
   onCreate: (name: string, options: { inheritWorkspace: boolean }) => Promise<void>;
 }) {
   const { t } = useTranslation('agents');
+  const { updateAgentSoul, agents } = useAgentsStore();
   const [name, setName] = useState('');
   const [inheritWorkspace, setInheritWorkspace] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+
+  const handlePresetChange = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (presetId) {
+      const preset = getPresetById(presetId);
+      if (preset) setName(preset.name);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
+      const prevIds = new Set(agents.map((a) => a.id));
       await onCreate(name.trim(), { inheritWorkspace });
+      // Apply soul if preset selected
+      if (selectedPresetId) {
+        const preset = getPresetById(selectedPresetId);
+        if (preset?.soul) {
+          // Find the newly created agent by name
+          const { agents: updatedAgents } = useAgentsStore.getState();
+          const newAgent = updatedAgents.find((a) => !prevIds.has(a.id) && a.name === name.trim());
+          if (newAgent) {
+            await updateAgentSoul(newAgent.id, preset.soul);
+          }
+        }
+      }
     } catch (error) {
       toast.error(t('toast.agentCreateFailed', { error: String(error) }));
       setSaving(false);
@@ -442,6 +466,22 @@ function AddAgentDialog({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pt-4 p-6">
+          <div className="space-y-2.5">
+            <Label htmlFor="agent-preset" className={labelClasses}>{t('createDialog.presetLabel', 'Start from a preset (optional)')}</Label>
+            <select
+              id="agent-preset"
+              value={selectedPresetId}
+              onChange={(e) => handlePresetChange(e.target.value)}
+              className={selectClasses}
+            >
+              <option value="">{t('createDialog.presetPlaceholder', 'Blank agent')}</option>
+              {AGENT_PRESETS.map((preset: AgentPreset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.emoji} {preset.name} — {preset.category}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="space-y-2.5">
             <Label htmlFor="agent-name" className={labelClasses}>{t('createDialog.nameLabel')}</Label>
             <Input
@@ -502,24 +542,47 @@ function AgentSettingsModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation('agents');
-  const { updateAgent, defaultModelRef } = useAgentsStore();
+  const { updateAgent, updateAgentSoul, fetchAgentSoul, defaultModelRef } = useAgentsStore();
   const [name, setName] = useState(agent.name);
   const [savingName, setSavingName] = useState(false);
   const [showModelModal, setShowModelModal] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [soul, setSoul] = useState('');
+  const [soulOriginal, setSoulOriginal] = useState('');
+  const [savingSoul, setSavingSoul] = useState(false);
+
+  useEffect(() => {
+    fetchAgentSoul(agent.id)
+      .then((s) => { setSoul(s); setSoulOriginal(s); })
+      .catch(() => { /* SOUL.md may not exist yet */ });
+  }, [agent.id, fetchAgentSoul]);
 
   useEffect(() => {
     setName(agent.name);
   }, [agent.name]);
 
   const hasNameChanges = name.trim() !== agent.name;
+  const hasSoulChanges = soul !== soulOriginal;
 
   const handleRequestClose = () => {
-    if (savingName || hasNameChanges) {
+    if (savingName || hasNameChanges || hasSoulChanges) {
       setShowCloseConfirm(true);
       return;
     }
     onClose();
+  };
+
+  const handleSaveSoul = async () => {
+    setSavingSoul(true);
+    try {
+      await updateAgentSoul(agent.id, soul);
+      setSoulOriginal(soul);
+      toast.success(t('toast.agentUpdated'));
+    } catch (error) {
+      toast.error(t('toast.agentUpdateFailed', { error: String(error) }));
+    } finally {
+      setSavingSoul(false);
+    }
   };
 
   const handleSaveName = async () => {
@@ -625,6 +688,32 @@ function AgentSettingsModal({
             </div>
           </div>
 
+          <div className="space-y-2.5">
+            <Label htmlFor="agent-soul" className={labelClasses}>{t('settingsDialog.soulLabel', 'Soul (System Prompt)')}</Label>
+            <textarea
+              id="agent-soul"
+              value={soul}
+              onChange={(e) => setSoul(e.target.value)}
+              placeholder={t('settingsDialog.soulPlaceholder', 'Describe the agent\'s personality, instructions, and goals...')}
+              rows={8}
+              className="w-full rounded-xl font-mono text-[13px] bg-[#eeece3] dark:bg-muted border border-black/10 dark:border-white/10 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-sm transition-all text-foreground placeholder:text-foreground/40 p-3 resize-y outline-none"
+            />
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => void handleSaveSoul()}
+                disabled={savingSoul || !hasSoulChanges}
+                className="h-[44px] text-[13px] font-medium rounded-xl px-4 border-black/10 dark:border-white/10 bg-[#eeece3] dark:bg-muted hover:bg-black/5 dark:hover:bg-white/5 shadow-none text-foreground/80 hover:text-foreground"
+              >
+                {savingSoul ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  t('common:actions.save')
+                )}
+              </Button>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -685,6 +774,7 @@ function AgentSettingsModal({
         onConfirm={() => {
           setShowCloseConfirm(false);
           setName(agent.name);
+          setSoul(soulOriginal);
           onClose();
         }}
         onCancel={() => setShowCloseConfirm(false)}

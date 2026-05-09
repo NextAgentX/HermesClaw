@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   assignChannelToAgent,
   clearChannelBinding,
@@ -10,6 +12,7 @@ import {
   updateAgentModel,
   updateAgentName,
 } from '../../utils/agent-config';
+import { expandPath } from '../../utils/paths';
 import { deleteChannelAccountConfig } from '../../utils/channel-config';
 import { syncAgentModelOverrideToRuntime, syncAllProviderAuthToRuntime } from '../../services/providers/provider-runtime-sync';
 import type { HostApiContext } from '../context';
@@ -240,6 +243,39 @@ export async function handleAgentRoutes(
         sendJson(res, 500, { success: false, error: String(error) });
       }
       return true;
+    }
+  }
+
+  if (url.pathname.startsWith('/api/agents/') && (req.method === 'GET' || req.method === 'POST')) {
+    const suffix = url.pathname.slice('/api/agents/'.length);
+    const parts = suffix.split('/').filter(Boolean);
+
+    if (parts.length === 2 && parts[1] === 'soul') {
+      const agentId = decodeURIComponent(parts[0]);
+      const agentDir = expandPath(`~/.openclaw/agents/${agentId}/agent`);
+      const soulPath = path.join(agentDir, 'SOUL.md');
+
+      if (req.method === 'GET') {
+        try {
+          const soul = fs.existsSync(soulPath) ? fs.readFileSync(soulPath, 'utf-8') : '';
+          sendJson(res, 200, { success: true, soul });
+        } catch (error) {
+          sendJson(res, 500, { success: false, error: String(error) });
+        }
+        return true;
+      }
+
+      if (req.method === 'POST') {
+        try {
+          const body = await parseJsonBody<{ soul: string }>(req);
+          fs.mkdirSync(agentDir, { recursive: true });
+          fs.writeFileSync(soulPath, body.soul ?? '', 'utf-8');
+          sendJson(res, 200, { success: true });
+        } catch (error) {
+          sendJson(res, 500, { success: false, error: String(error) });
+        }
+        return true;
+      }
     }
   }
 

@@ -16,6 +16,8 @@ interface AgentsState {
   createAgent: (name: string, options?: { inheritWorkspace?: boolean }) => Promise<void>;
   updateAgent: (agentId: string, name: string) => Promise<void>;
   updateAgentModel: (agentId: string, modelRef: string | null) => Promise<void>;
+  updateAgentSoul: (agentId: string, soul: string) => Promise<void>;
+  fetchAgentSoul: (agentId: string) => Promise<string>;
   deleteAgent: (agentId: string) => Promise<void>;
   assignChannel: (agentId: string, channelType: ChannelType) => Promise<void>;
   removeChannel: (agentId: string, channelType: ChannelType) => Promise<void>;
@@ -101,6 +103,33 @@ export const useAgentsStore = create<AgentsState>((set) => ({
     } catch (error) {
       set({ error: String(error) });
       throw error;
+    }
+  },
+
+  updateAgentSoul: async (agentId: string, soul: string) => {
+    set({ error: null });
+    try {
+      await hostApiFetch<{ success: boolean }>(
+        `/api/agents/${encodeURIComponent(agentId)}/soul`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ soul }),
+        }
+      );
+    } catch (error) {
+      set({ error: String(error) });
+      throw error;
+    }
+  },
+
+  fetchAgentSoul: async (agentId: string): Promise<string> => {
+    try {
+      const result = await hostApiFetch<{ success: boolean; soul: string }>(
+        `/api/agents/${encodeURIComponent(agentId)}/soul`
+      );
+      return result.soul ?? '';
+    } catch {
+      return '';
     }
   },
 
