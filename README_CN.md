@@ -29,6 +29,16 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/NextAgentX/HermesClaw">
+    <img src="https://img.shields.io/github/stars/NextAgentX/HermesClaw?style=social" alt="GitHub Stars" />
+  </a>
+</p>
+
+<p align="center">
+  <b>如果 HermesClaw 对你有帮助，欢迎点一个 ⭐ — 这是对项目最直接的支持，也帮助更多开发者发现它。</b>
+</p>
+
 ---
 
 ## 项目介绍
@@ -223,3 +233,10 @@ HermesClaw 的完成离不开 OpenClaw、HermesAgent 和 ClawX。
 ## 许可证
 
 HermesClaw 基于 [MIT License](LICENSE) 开源。
+
+---
+
+<p align="center">
+  <b>如果这个项目对你有用，欢迎点一个 ⭐ Star — 它帮助更多开发者发现 HermesClaw，也是对持续开发最好的鼓励。</b><br/>
+  <a href="https://github.com/NextAgentX/HermesClaw">⭐ 在 GitHub 上 Star HermesClaw</a>
+</p>

@@ -29,6 +29,16 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/NextAgentX/HermesClaw">
+    <img src="https://img.shields.io/github/stars/NextAgentX/HermesClaw?style=social" alt="GitHub Stars" />
+  </a>
+</p>
+
+<p align="center">
+  <b>If HermesClaw saves you time or sparks ideas, a ⭐ on GitHub means a lot — it helps others discover this project.</b>
+</p>
+
 ---
 
 ## Overview
@@ -223,3 +233,10 @@ Thanks to everyone who contributes ideas, code, tests, documentation, and feedba
 ## License
 
 HermesClaw is open source under the [MIT License](LICENSE).
+
+---
+
+<p align="center">
+  <b>Found HermesClaw useful? Give it a ⭐ on GitHub — it helps the project grow and reach more developers building with local AI agents.</b><br/>
+  <a href="https://github.com/NextAgentX/HermesClaw">⭐ Star HermesClaw on GitHub</a>
+</p>
