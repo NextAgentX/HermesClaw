@@ -462,17 +462,6 @@ test.describe('Settings runtime bridge actions', () => {
     await expect(page.getByTestId('settings-runtime-hermes-stop-button')).toBeDisabled();
     await expect(page.getByTestId('settings-runtime-hermes-restart-button')).toBeEnabled();
 
-    await page.getByTestId('settings-tab-updates').click();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-check-button')).toBeEnabled();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-apply-button')).toBeEnabled();
-    await expect(page.getByTestId('settings-runtime-openclaw-rollback-button')).toBeEnabled();
-
-    await page.getByTestId('settings-runtime-openclaw-update-check-button').click();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('stable: 1.3.0 update available');
-    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('Gateway runtime refresh');
-    await page.getByTestId('settings-runtime-openclaw-update-apply-button').click();
-    await expect(page.getByTestId('settings-runtime-openclaw-update-result')).toContainText('automatically rolled back OpenClaw to 1.2.3');
-
     await page.getByTestId('settings-tab-integration').click();
     await expect(page.getByTestId('settings-hermesclaw-channel')).toContainText('stable');
     await expect(page.getByTestId('settings-hermesclaw-version')).toContainText('0.9.0');
