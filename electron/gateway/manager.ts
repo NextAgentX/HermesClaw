@@ -44,6 +44,7 @@ import { GatewayLifecycleController, LifecycleSupersededError } from './lifecycl
 import { launchGatewayProcess } from './process-launcher';
 import { GatewayRestartController } from './restart-controller';
 import { GatewayRestartGovernor } from './restart-governor';
+import { GatewayLifecycleQueue, type LifecycleQueueState } from './lifecycle-queue';
 import {
   DEFAULT_GATEWAY_RELOAD_POLICY,
   loadGatewayReloadPolicy,
@@ -51,6 +52,8 @@ import {
 } from './reload-policy';
 import { classifyGatewayStderrMessage, recordGatewayStartupStderrLine } from './startup-stderr';
 import { runGatewayStartupSequence } from './startup-orchestrator';
+import { ConfigReloadHandler, type ConfigReloadOptions, type ConfigReloadResult } from './config-reload-no-restart';
+import { ConfigFileWatcher } from './config-file-watcher';
 
 export interface GatewayStatus {
   state: GatewayLifecycleState;
@@ -137,8 +140,11 @@ export class GatewayManager extends EventEmitter {
   private readonly lifecycleController = new GatewayLifecycleController();
   private readonly restartController = new GatewayRestartController();
   private readonly restartGovernor = new GatewayRestartGovernor();
+  private readonly lifecycleQueue = new GatewayLifecycleQueue();
   private reloadDebounceTimer: NodeJS.Timeout | null = null;
   private reloadPolicy: GatewayReloadPolicy = { ...DEFAULT_GATEWAY_RELOAD_POLICY };
+  private readonly configReloadHandler: ConfigReloadHandler;
+  private readonly configFileWatcher = new ConfigFileWatcher();
   private reloadPolicyLoadedAt = 0;
   private reloadPolicyRefreshPromise: Promise<void> | null = null;
   private externalShutdownSupported: boolean | null = null;
@@ -192,8 +198,16 @@ export class GatewayManager extends EventEmitter {
       },
     });
     this.reconnectConfig = { ...DEFAULT_RECONNECT_CONFIG, ...config };
+    this.configReloadHandler = new ConfigReloadHandler(this, this.restartController, this.reloadPolicy);
     // Device identity is loaded lazily in start() — not in the constructor —
     // so that async file I/O and key generation don't block module loading.
+
+    this.configFileWatcher.on('config-changed', (filePath) => {
+      logger.debug(`Config file changed: ${filePath}`);
+      void this.reloadConfig('config-file-changed').catch((error) => {
+        logger.warn('Config reload triggered by file change failed:', error);
+      });
+    });
 
     this.on('gateway:ready', () => {
       this.clearGatewayReadyFallback();
@@ -240,10 +254,35 @@ export class GatewayManager extends EventEmitter {
   }
 
   /**
+   * Get current lifecycle queue state
+   */
+  getLifecycleQueueState(): LifecycleQueueState {
+    return this.lifecycleQueue.getState();
+  }
+
+  /**
    * Check if Gateway is connected and ready
    */
   isConnected(): boolean {
     return this.stateController.isConnected(this.ws?.readyState === WebSocket.OPEN);
+  }
+
+  /**
+   * Check if Gateway start is currently locked (start flow in progress)
+   */
+  isStartLocked(): boolean {
+    return this.startLock;
+  }
+
+  /**
+   * Reload gateway configuration with optional restart
+   * Delegates to ConfigReloadHandler which implements 3-tier strategy:
+   * 1. config.patch (partial update, no restart)
+   * 2. Deferred restart (if gateway stable)
+   * 3. Immediate restart (debounced)
+   */
+  async reloadConfig(reason: string, options?: Partial<ConfigReloadOptions>): Promise<ConfigReloadResult> {
+    return await this.configReloadHandler.reload(reason, options);
   }
 
   /**
@@ -385,6 +424,10 @@ export class GatewayManager extends EventEmitter {
       throw error;
     } finally {
       this.startLock = false;
+      // Start config file watcher if gateway started successfully
+      if (this.status.state === 'running') {
+        this.configFileWatcher.start();
+      }
       this.restartController.flushDeferredRestart(
         'start:finally',
         {
@@ -454,6 +497,7 @@ export class GatewayManager extends EventEmitter {
     clearPendingGatewayRequests(this.pendingRequests, new Error('Gateway stopped'));
 
     this.restartController.resetDeferredRestart();
+    this.configFileWatcher.stop();
     this.isAutoReconnectStart = false;
     this.diagnostics.consecutiveHeartbeatMisses = 0;
     this.setStatus({ state: 'stopped', error: undefined, pid: undefined, connectedAt: undefined, uptime: undefined, gatewayReady: undefined });

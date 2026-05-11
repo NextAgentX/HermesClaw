@@ -19,6 +19,7 @@ const HOST_EVENT_TO_IPC_CHANNEL: Record<string, string> = {
   'channel:wechat-success': 'channel:wechat-success',
   'channel:wechat-error': 'channel:wechat-error',
   'runtime:install:progress': 'runtime:install-progress',
+  'acp:activity': 'acp:activity',
 };
 
 function getEventSource(): EventSource {

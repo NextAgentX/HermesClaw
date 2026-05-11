@@ -1434,6 +1434,16 @@ function registerGatewayHandlers(
   gatewayManager.on('notification', (notification) => {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('gateway:notification', notification);
+
+      // Forward ACP agent events as typed activities to renderer
+      const notif = notification as { method?: string; params?: unknown };
+      if (notif.method === 'agent' && notif.params) {
+        const { parseAgentNotification } = require('../../services/acp-event-bridge') as typeof import('../../services/acp-event-bridge');
+        const activity = parseAgentNotification(notif.params as Parameters<typeof parseAgentNotification>[0]);
+        if (activity) {
+          mainWindow.webContents.send('acp:activity', activity);
+        }
+      }
     }
   });
 

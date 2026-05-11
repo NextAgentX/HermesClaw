@@ -180,6 +180,7 @@ const electronAPI = {
         'oauth:error',
         'openclaw:cli-installed',
         'runtime:install-progress',
+        'acp:activity',
       ];
 
       if (validChannels.includes(channel) || channel.startsWith('ext:')) {
@@ -228,6 +229,7 @@ const electronAPI = {
         'oauth:success',
         'oauth:error',
         'runtime:install-progress',
+        'acp:activity',
       ];
 
       if (validChannels.includes(channel) || channel.startsWith('ext:')) {
