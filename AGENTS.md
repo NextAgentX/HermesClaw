@@ -1,6 +1,8 @@
 # HermesClaw agent notes
 
 ## Project shape
+
+- 始终使用中文回复
 - HermesClaw is a single-package pnpm workspace (`packages: ['.']`) for an Electron + React + TypeScript + Vite desktop app integrating OpenClaw/Hermes agent chat, workflows, runtimes, models, skills, channels, and tasks.
 - Use Node 24 for CI parity and pnpm 10.31.0 from `packageManager`; CI installs with `pnpm install --frozen-lockfile`.
 - Main package entry is `dist-electron/main/index.js`; source boundaries are `electron/` for main/runtime/services/gateway/extensions/preload, `src/` for renderer, `resources/` for runtime resources and CLI wrappers, `scripts/` for build/package maintenance, `shared/` for cross-process constants/types, and `tests/` for unit/e2e.
